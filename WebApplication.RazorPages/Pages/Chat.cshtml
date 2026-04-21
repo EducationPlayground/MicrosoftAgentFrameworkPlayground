@@ -1,0 +1,96 @@
+@page
+@model ChatModel
+@{
+    ViewData["Title"] = "Soru & Cevap";
+}
+
+<div class="container mt-4">
+    <h2 class="mb-4">
+        <i class="bi bi-chat-dots"></i> Belge Soru &amp; Cevap
+    </h2>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="post">
+                <div class="mb-3">
+                    <label asp-for="Question" class="form-label fw-semibold">Sorunuz</label>
+                    <textarea asp-for="Question"
+                              class="form-control"
+                              rows="3"
+                              placeholder="Belgeyle ilgili sorunuzu buraya yazın..."
+                              required></textarea>
+                    <span asp-validation-for="Question" class="text-danger"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="DocumentId" class="form-label fw-semibold">
+                        Belge ID <span class="text-muted fw-normal">(isteğe bağlı)</span>
+                    </label>
+                    <input asp-for="DocumentId"
+                           type="number"
+                           class="form-control"
+                           placeholder="Belirli bir belge için ID girin, boş bırakırsanız tüm belgeler aranır" />
+                </div>
+
+                <button type="submit" class="btn btn-primary px-4">
+                    <span>Gönder</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Hata:</strong> @Model.ErrorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Answer))
+    {
+        <div class="card border-success shadow-sm mb-4">
+            <div class="card-header bg-success text-white fw-semibold">
+                Yanıt
+            </div>
+            <div class="card-body">
+                <p class="mb-0" style="white-space: pre-wrap;">@Model.Answer</p>
+            </div>
+        </div>
+
+        @if (Model.Sources.Count > 0)
+        {
+            <div class="card shadow-sm">
+                <div class="card-header fw-semibold">
+                    Kaynaklar
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Belge Adı</th>
+                                <th>Sayfa</th>
+                                <th>İlgililik</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var source in Model.Sources)
+                            {
+                                <tr>
+                                    <td>@source.DocumentName</td>
+                                    <td>@source.PageNumber</td>
+                                    <td>
+                                        <span class="badge bg-secondary">@source.Relevance.ToString("P1")</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
