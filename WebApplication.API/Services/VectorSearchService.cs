@@ -1,7 +1,6 @@
 using Microsoft.Data.SqlTypes;
 using Microsoft.EntityFrameworkCore;
 using WebApplication.API.Data;
-using WebApplication.API.Data.Entities;
 
 namespace WebApplication.API.Services;
 
@@ -22,7 +21,17 @@ public class VectorSearchService(AppDbContext db)
 
         return await db.DocumentChunks
             .Where(c => c.Embedding != null && (!documentId.HasValue || c.DocumentId == documentId))
-            .OrderBy(c => EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector))
+            .Select(c => new
+            {
+                c.Id,
+                c.DocumentId,
+                c.Content,
+                c.PageNumber,
+                c.ChunkIndex,
+                c.Document.OriginalFileName,
+                Distance = EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector)
+            })
+            .OrderBy(c => c.Distance)
             .Take(topN)
             .Select(c => new ChunkSearchResult(
                 c.Id,
@@ -30,8 +39,8 @@ public class VectorSearchService(AppDbContext db)
                 c.Content,
                 c.PageNumber,
                 c.ChunkIndex,
-                c.Document.OriginalFileName,
-                1 - EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector)))
+                c.OriginalFileName,
+                1 - c.Distance))
             .ToListAsync();
     }
 }

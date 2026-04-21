@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using Scalar.AspNetCore;
 using WebApplication.API.Data;
 using WebApplication.API.Endpoints;
 using WebApplication.API.Services;
@@ -31,6 +32,7 @@ builder.Services.AddScoped<RagService>();
 
 var app = builder.Build();
 
+app.MapScalarApiReference();
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {

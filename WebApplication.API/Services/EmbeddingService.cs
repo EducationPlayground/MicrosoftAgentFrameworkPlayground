@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.Extensions.AI;
 
 namespace WebApplication.API.Services;
@@ -32,12 +31,5 @@ public class EmbeddingService(IEmbeddingGenerator<string, Embedding<float>> embe
         return result;
     }
 
-    /// <summary>
-    /// Converts a float array to SQL Server VECTOR literal format: '[0.1,0.2,...]'
-    /// </summary>
-    public static string ToVectorLiteral(float[] vector)
-    {
-        var values = string.Join(",", vector.Select(v => v.ToString(CultureInfo.InvariantCulture)));
-        return $"[{values}]";
-    }
+
 }
