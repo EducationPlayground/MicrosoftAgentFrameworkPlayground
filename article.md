@@ -239,3 +239,102 @@ Answer + source citations returned to client
 | Minimal API endpoints | Less boilerplate than controllers; suitable for a focused API surface |
 | Batch embedding (20 at a time) | Respects OpenAI API rate limits |
 | Source citations in the response | Enables the client to show verifiable references, increasing trust |
+
+---
+
+## AI Paketleri ve Sağladıkları Tipler
+
+Projede kullanılan üç farklı AI NuGet paketi ve her birinin sağladığı önemli class/interface'ler aşağıda listelenmiştir.
+
+### `Microsoft.Extensions.AI`
+
+Vendor-agnostik AI soyutlamalarını içeren resmi .NET paketi. Projenin temel bağımlılığı budur.
+
+| Tip | Tür | Açıklama |
+|---|---|---|
+| `IChatClient` | Interface | Chat completion işlemleri için soyutlama. `RagService` bu interface'i constructor injection ile alır ve `GetResponseAsync()` çağırır. |
+| `IEmbeddingGenerator<TInput, TEmbedding>` | Generic Interface | Metin → vektör dönüşümü için soyutlama. `EmbeddingService`, `IEmbeddingGenerator<string, Embedding<float>>` olarak alır. |
+| `Embedding<float>` | Class | Tek bir embedding sonucunu temsil eder. `embedding.Vector.ToArray()` ile `float[]`'e çevrilir. |
+| `ChatMessage` | Class | Bir konuşmadaki tek bir mesajı temsil eder (rol + içerik). |
+| `ChatRole` | Struct | Mesajın rolünü belirtir: `ChatRole.System`, `ChatRole.User`, `ChatRole.Assistant`. |
+| `AddChatClient()` | Extension Method | `IServiceCollection` üzerinde `IChatClient`'ı DI container'a kaydeder. |
+| `AddEmbeddingGenerator()` | Extension Method | `IServiceCollection` üzerinde `IEmbeddingGenerator`'ı DI container'a kaydeder. |
+
+```csharp
+// RagService.cs — Microsoft.Extensions.AI tipleri
+IChatClient chatClient               // interface
+ChatMessage, ChatRole                // mesaj modeli
+await chatClient.GetResponseAsync(messages)  // uzantı metodu
+```
+
+---
+
+### `Microsoft.Extensions.AI.OpenAI`
+
+`Microsoft.Extensions.AI` soyutlamalarını OpenAI SDK'sının somut tiplerine bağlayan köprü paketidir. Doğrudan uygulama kodunda görünmez; yalnızca `Program.cs` kayıt satırlarında kullanılır.
+
+| Tip | Tür | Açıklama |
+|---|---|---|
+| `AsIChatClient()` | Extension Method | `OpenAI.Chat.ChatClient`'ı `IChatClient` olarak sarmalayan adaptör. |
+| `AsIEmbeddingGenerator()` | Extension Method | `OpenAI.Embeddings.EmbeddingClient`'ı `IEmbeddingGenerator<string, Embedding<float>>` olarak sarmalayan adaptör. |
+
+```csharp
+// Program.cs — Microsoft.Extensions.AI.OpenAI köprüsü
+openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient()
+openAiClient.GetEmbeddingClient("text-embedding-3-small").AsIEmbeddingGenerator()
+```
+
+---
+
+### `OpenAI`
+
+Resmi OpenAI .NET SDK'sıdır. Ham API istemcilerini oluşturur; `Microsoft.Extensions.AI.OpenAI` tarafından sarmalanarak projede kullanılır.
+
+| Tip | Tür | Açıklama |
+|---|---|---|
+| `OpenAIClient` | Class | API anahtarıyla oluşturulan kök istemci. `GetChatClient()` ve `GetEmbeddingClient()` fabrika metodlarını sunar. |
+| `ChatClient` | Class | `openAiClient.GetChatClient("gpt-4o-mini")` ile elde edilir; `AsIChatClient()` ile sarmalanır. |
+| `EmbeddingClient` | Class | `openAiClient.GetEmbeddingClient("text-embedding-3-small")` ile elde edilir; `AsIEmbeddingGenerator()` ile sarmalanır. |
+
+```csharp
+// Program.cs — OpenAI SDK somut tipleri
+var openAiClient = new OpenAIClient(openAiKey);
+openAiClient.GetChatClient("gpt-4o-mini")
+openAiClient.GetEmbeddingClient("text-embedding-3-small")
+```
+
+---
+
+### `Microsoft.EntityFrameworkCore.SqlServer` (Bonus: Vektör Desteği)
+
+EF Core'un SQL Server sağlayıcısından gelen `Microsoft.Data.SqlTypes` namespace'i, vektör depolama için özel bir tip sunar.
+
+| Tip | Tür | Açıklama |
+|---|---|---|
+| `SqlVector<T>` | Struct | `float[]`'i SQL Server'ın yerel `vector` kolonuna yazılabilir hale getirir. `VectorSearchService`'de `SaveChunkWithEmbeddingAsync` ve `SearchSimilarChunksAsync` metodlarında kullanılır. |
+| `EF.Functions.VectorDistance()` | Extension Method | EF Core LINQ sorguları içinde SQL Server'ın `VECTOR_DISTANCE()` fonksiyonunu çağırır. Kosinüs mesafesiyle en yakın chunk'ları sıralar. |
+
+```csharp
+// VectorSearchService.cs — vektör tipi
+var sqlVector = new SqlVector<float>(embedding);
+EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector)
+```
+
+---
+
+### Paket → Tip Özet Tablosu
+
+| NuGet Paketi | Tip | Kullanıldığı Yer |
+|---|---|---|
+| `Microsoft.Extensions.AI` | `IChatClient` | `RagService`, `Program.cs` |
+| `Microsoft.Extensions.AI` | `IEmbeddingGenerator<string, Embedding<float>>` | `EmbeddingService`, `Program.cs` |
+| `Microsoft.Extensions.AI` | `Embedding<float>` | `EmbeddingService` |
+| `Microsoft.Extensions.AI` | `ChatMessage` | `RagService` |
+| `Microsoft.Extensions.AI` | `ChatRole` | `RagService` |
+| `Microsoft.Extensions.AI.OpenAI` | `AsIChatClient()` | `Program.cs` |
+| `Microsoft.Extensions.AI.OpenAI` | `AsIEmbeddingGenerator()` | `Program.cs` |
+| `OpenAI` | `OpenAIClient` | `Program.cs` |
+| `OpenAI` | `ChatClient` | `Program.cs` (dolaylı) |
+| `OpenAI` | `EmbeddingClient` | `Program.cs` (dolaylı) |
+| `Microsoft.EntityFrameworkCore.SqlServer` | `SqlVector<float>` | `VectorSearchService` |
+| `Microsoft.EntityFrameworkCore.SqlServer` | `EF.Functions.VectorDistance()` | `VectorSearchService` |
