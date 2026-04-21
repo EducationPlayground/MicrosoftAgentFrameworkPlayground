@@ -1,0 +1,47 @@
+using Microsoft.Data.SqlTypes;
+using Microsoft.EntityFrameworkCore;
+using WebApplication.API.Data;
+using WebApplication.API.Data.Entities;
+
+namespace WebApplication.API.Services;
+
+public class VectorSearchService(AppDbContext db)
+{
+    public async Task SaveChunkWithEmbeddingAsync(int chunkId, float[] embedding)
+    {
+        var sqlVector = new SqlVector<float>(embedding);
+
+        await db.DocumentChunks
+            .Where(c => c.Id == chunkId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Embedding, sqlVector));
+    }
+
+    public async Task<List<ChunkSearchResult>> SearchSimilarChunksAsync(float[] queryEmbedding, int topN = 5, int? documentId = null)
+    {
+        var sqlVector = new SqlVector<float>(queryEmbedding);
+
+        return await db.DocumentChunks
+            .Where(c => c.Embedding != null && (!documentId.HasValue || c.DocumentId == documentId))
+            .OrderBy(c => EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector))
+            .Take(topN)
+            .Select(c => new ChunkSearchResult(
+                c.Id,
+                c.DocumentId,
+                c.Content,
+                c.PageNumber,
+                c.ChunkIndex,
+                c.Document.OriginalFileName,
+                1 - EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector)))
+            .ToListAsync();
+    }
+}
+
+public record ChunkSearchResult(
+    int Id,
+    int DocumentId,
+    string Content,
+    int PageNumber,
+    int ChunkIndex,
+    string DocumentName,
+    double Relevance);
+

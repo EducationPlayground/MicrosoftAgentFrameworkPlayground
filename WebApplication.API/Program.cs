@@ -1,39 +1,44 @@
-var builder = WebApplication.CreateBuilder(args);
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using OpenAI;
+using WebApplication.API.Data;
+using WebApplication.API.Endpoints;
+using WebApplication.API.Services;
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+var builder = global::Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
+
+// OpenAPI
 builder.Services.AddOpenApi();
+
+// Database
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+
+// OpenAI
+var openAiKey = Environment.GetEnvironmentVariable("OPEN_AI_KEY")
+    ?? throw new InvalidOperationException("OPEN_AI_KEY environment variable is not set.");
+
+var openAiClient = new OpenAIClient(openAiKey);
+
+builder.Services.AddChatClient(openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient());
+builder.Services.AddEmbeddingGenerator(openAiClient.GetEmbeddingClient("text-embedding-3-small").AsIEmbeddingGenerator());
+
+// Services
+builder.Services.AddSingleton<PdfProcessingService>();
+builder.Services.AddScoped<EmbeddingService>();
+builder.Services.AddScoped<VectorSearchService>();
+builder.Services.AddScoped<RagService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+// Map endpoints
+app.MapDocumentEndpoints();
+app.MapChatEndpoints();
 
 app.Run();
-
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
