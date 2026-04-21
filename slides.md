@@ -2,30 +2,16 @@
 marp: true
 theme: default
 paginate: true
-backgroundColor: #0f172a
-color: #f1f5f9
-style: |
-  section {
-    font-family: 'Segoe UI', sans-serif;
-  }
-  h1 { color: #38bdf8; }
-  h2 { color: #7dd3fc; }
-  h3 { color: #bae6fd; }
-  code { background: #1e293b; color: #a5f3fc; }
-  table { width: 100%; }
-  th { background: #1e40af; color: white; }
-  td { background: #1e293b; }
-  strong { color: #fbbf24; }
 ---
 
 <!-- SLIDE 1 — TITLE -->
 # Retrieval-Augmented Generation (RAG)
 ## A Step-by-Step Deep Dive
 
-**Stack:**
+**Tech Stack:**
 - .NET 10 · ASP.NET Core Minimal API
-- OpenAI — `gpt-4o-mini` + `text-embedding-3-small`
-- SQL Server — native `VECTOR(1536)` column
+- OpenAI — GPT-4o-mini + text-embedding-3-small
+- SQL Server — native vector column (1536 dimensions)
 - Microsoft.Extensions.AI — vendor-neutral abstractions
 - PdfPig — open-source PDF parsing
 
@@ -38,8 +24,8 @@ The naive approach — pasting the full document into the prompt — fails:
 
 | Problem | Detail |
 |---|---|
-| **Token limits** | A 300-page PDF can easily exceed 128 k tokens |
-| **Cost** | 100 000 tokens per request × every query |
+| **Token limits** | A 300-page PDF can easily exceed 128 000 tokens |
+| **Cost** | Sending 100 000 tokens on every single query is very expensive |
 | **Accuracy** | "Lost in the middle" — LLMs miss content buried deep in long contexts |
 
 > LLMs are trained on a **fixed snapshot** of the world.  
@@ -70,20 +56,19 @@ Documents → Vectors            Question → Retrieve → Generate → Answer
 <!-- SLIDE 4 — ARCHITECTURE OVERVIEW -->
 # High-Level Architecture
 
-```
-Client
-  │
-  ├── POST /api/documents/upload   →   Ingestion Pipeline
-  │
-  └── POST /api/chat/ask           →   RAG Query Pipeline
-```
+**Two endpoints:**
+
+- `POST /api/documents/upload` → Ingestion Pipeline
+- `POST /api/chat/ask` → RAG Query Pipeline
+
+**Four services:**
 
 | Service | Responsibility |
 |---|---|
-| `PdfProcessingService` | Extract + chunk PDF text |
-| `EmbeddingService` | Call OpenAI embeddings API |
-| `VectorSearchService` | Cosine search in SQL Server |
-| `RagService` | Orchestrate retrieval + LLM call |
+| PdfProcessingService | Extract and chunk PDF text |
+| EmbeddingService | Call OpenAI embeddings API |
+| VectorSearchService | Cosine similarity search in SQL Server |
+| RagService | Orchestrate retrieval + LLM call |
 
 ---
 
@@ -95,17 +80,17 @@ Client
 ```
  PDF File
     │
-   [1] Validate & save to disk (GUID filename)
+   [1] Validate & save to disk (unique filename)
     │
-   [2] PdfPig extracts text page-by-page
+   [2] Extract text from PDF, page by page
     │
-   [3] Split into overlapping chunks (1000 / 200)
+   [3] Split into overlapping chunks (1000 / 200 chars)
     │
-   [4] INSERT Document + DocumentChunks → SQL Server
+   [4] Save Document and Chunks to SQL Server
     │
-   [5] Embed chunks (batch 20) → store VECTOR(1536)
+   [5] Generate embeddings (batch 20) → store as vectors
     │
-  201 Created
+  Done — document is searchable
 ```
 
 ---
@@ -115,56 +100,50 @@ Client
 
 **Endpoint:** `POST /api/documents/upload`
 
-- Validates: must be `.pdf`, non-empty
-- Saves to `wwwroot/uploads/` with a **GUID filename** to prevent collisions
+**What happens:**
+- Validates the uploaded file — must be a PDF, must not be empty
+- Generates a **unique filename** (GUID) to prevent naming conflicts
+- Saves the file to the `uploads/` folder on disk
 
-```csharp
-var savedFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-var filePath = Path.Combine(uploadsDir, savedFileName);
+**Why save to disk first?**
 
-await using var stream = new FileStream(filePath, FileMode.Create);
-await file.CopyToAsync(stream);
-```
-
-**Why disk first?**  
-The PDF stream needs to be opened multiple times — buffering to disk avoids loading into memory.
+The PDF needs to be read more than once during processing.  
+Saving to disk avoids loading the entire file into memory multiple times.
 
 ---
 
 <!-- SLIDE 7 — STEP 2: EXTRACT TEXT -->
 # Step 2 — Extract Text from PDF
 
-**Library:** [PdfPig](https://github.com/UglyToad/PdfPig) — pure .NET, no native deps
+**Library used:** PdfPig — pure .NET library, no native dependencies
 
-```csharp
-using var document = PdfDocument.Open(pdfStream);
+**What happens:**
+- Opens the PDF file
+- Reads every page one by one
+- Skips blank pages and image-only pages
+- Tags each text block with its **page number**
 
-foreach (Page page in document.GetPages())
-{
-    var text = page.Text;
-    if (string.IsNullOrWhiteSpace(text)) continue;
+**Why track the page number?**
 
-    var chunks = SplitIntoChunks(text.Trim());
-    allChunks.Add((chunk, page.Number)); // tagged with page number!
-}
-```
-
-- Iterates every page
-- Skips image-only / blank pages
-- Tags each chunk with **page number** → used for citations later
+Page numbers are stored with each chunk and later returned in the response  
+so users can verify the answer in the original document.
 
 ---
 
 <!-- SLIDE 8 — STEP 3: CHUNKING -->
 # Step 3 — Split into Overlapping Chunks
 
-```
-MaxChunkSize = 1000 characters
-OverlapSize  =  200 characters
-```
+**Configuration:**
 
-**Why overlap?** A key sentence at a 1000-char boundary would be split across two chunks.  
-Overlap ensures it appears fully in at least one.
+- Max chunk size: **1000 characters**
+- Overlap size: **200 characters**
+
+**Why overlap?**
+
+A key sentence that falls exactly at the 1000-character boundary  
+would be cut in half and lost between two chunks.
+
+With 200-character overlap, that sentence appears fully in at least one chunk.
 
 ```
 Chunk 1: ████████████████████  (1000 chars)
@@ -173,81 +152,65 @@ Chunk 1: ████████████████████  (1000 cha
              200-char overlap
 ```
 
-```csharp
-start += MaxChunkSize - OverlapSize; // advance 800, not 1000
-```
+Each step advances **800 characters**, not 1000.
 
 ---
 
 <!-- SLIDE 9 — STEP 4: PERSIST TO DATABASE -->
-# Step 4 — Persist to SQL Server
+# Step 4 — Save to SQL Server
 
-Two-step save (need DB-generated IDs before inserting vectors):
+**Two-step process** (chunk IDs are needed before storing vectors):
 
-```csharp
-// 1. Insert Document row
-db.Documents.Add(document);
-await db.SaveChangesAsync(); // ← generates document.Id
+1. Insert the **Document** row → database generates its ID
+2. Insert all **DocumentChunk** rows with content and page number  
+   (Embedding column is left empty for now)
 
-// 2. Insert chunks (Embedding = NULL for now)
-db.DocumentChunks.AddRange(chunkEntities);
-await db.SaveChangesAsync();
-```
+**Database schema:**
 
-**Schema:**
-```
-DocumentChunks
-├── Id           INT IDENTITY (PK)
-├── DocumentId   INT (FK)
-├── Content      NVARCHAR(MAX)
-├── PageNumber   INT
-└── Embedding    VECTOR(1536)  ← native SQL Server vector column
-```
+| Column | Type | Notes |
+|---|---|---|
+| Id | INT | Primary key, auto-generated |
+| DocumentId | INT | Foreign key to Document |
+| Content | NVARCHAR(MAX) | The chunk text |
+| PageNumber | INT | Source page |
+| Embedding | VECTOR(1536) | Filled in Step 5 |
 
 ---
 
 <!-- SLIDE 10 — STEP 5: GENERATE EMBEDDINGS -->
 # Step 5 — Generate & Store Embeddings
 
-**Service:** `EmbeddingService` · **Model:** `text-embedding-3-small`
+**Model:** text-embedding-3-small  
+**Output:** 1536-dimensional float vector per chunk
 
-Each chunk → **1536-dimensional float vector** encoding its semantic meaning.
+**What happens:**
+- Chunks are sent to OpenAI in **batches of 20** to respect rate limits
+- Each chunk is converted to a vector (1536 numbers)
+- Vectors are saved back into the Embedding column in SQL Server
 
-```csharp
-// Batches of 20 to respect API rate limits
-for (var i = 0; i < texts.Count; i += 20)
-{
-    var batch = texts.Skip(i).Take(20).ToList();
-    var embeddings = await embeddingGenerator.GenerateAsync(batch);
-    result.AddRange(embeddings.Select(e => e.Vector.ToArray()));
-}
-```
+**Why batches of 20?**
 
-```csharp
-// Persist using SQL Server native VECTOR type
-var sqlVector = new SqlVector<float>(embedding);
-await db.DocumentChunks
-    .Where(c => c.Id == chunkId)
-    .ExecuteUpdateAsync(s => s.SetProperty(c => c.Embedding, sqlVector));
-```
+OpenAI has rate limits per minute.  
+Batching reduces the number of API calls while staying within limits.
 
 ---
 
 <!-- SLIDE 11 — WHAT IS AN EMBEDDING? -->
 # What Is a Vector Embedding?
 
-A 1536-dimensional point in mathematical space where **meaning** determines position.
+A vector embedding is a list of 1536 numbers that encodes the **meaning** of a text.
 
-```
-"What is the revenue?"   →  [0.012, -0.847, 0.334, ... ]  (1536 floats)
-"Annual income figures"  →  [0.018, -0.841, 0.329, ... ]  ← very close!
-"The cat sat on a mat"   →  [0.723,  0.102, -0.551, ... ] ← very far
-```
+Texts with similar meaning produce vectors that are **mathematically close** to each other — regardless of the exact words used.
 
-> Texts with **similar meaning** end up **close together** in vector space —  
-> regardless of the exact words used.
+**Example:**
 
-This is what makes semantic search possible.
+| Text | Vector position |
+|---|---|
+| "What is the revenue?" | [0.012, -0.847, 0.334, ...] |
+| "Annual income figures" | [0.018, -0.841, 0.329, ...] ← very close! |
+| "The cat sat on a mat" | [0.723, 0.102, -0.551, ...] ← very far |
+
+> This is what makes **semantic search** possible — finding by meaning, not keywords.
 
 ---
 
@@ -259,17 +222,17 @@ This is what makes semantic search possible.
 ```
  User question
       │
-     [1] Embed the question → float[1536]
+     [1] Convert question to a vector (same model as ingestion)
       │
-     [2] VECTOR_DISTANCE cosine search → top-5 chunks
+     [2] Cosine similarity search → retrieve top 5 chunks
       │
-     [3] Build grounding context with source tags
+     [3] Build a context block with numbered source references
       │
-     [4] Construct System + User messages
+     [4] Construct System prompt + User message
       │
-     [5] IChatClient → gpt-4o-mini
+     [5] Send to GPT-4o-mini → get answer
       │
-     [6] 200 OK { answer, sources[] }
+     [6] Return answer + source citations to the client
 ```
 
 ---
@@ -277,48 +240,43 @@ This is what makes semantic search possible.
 <!-- SLIDE 13 — STEP 6: EMBED THE QUESTION -->
 # Step 6 — Embed the User's Question
 
-**Critical rule:** use the **exact same model** as ingestion.  
-Different models produce incompatible vector spaces — cosine distances would be meaningless.
+The user's question is converted into a vector using **the exact same embedding model** that was used during ingestion.
 
-```csharp
-var queryEmbedding = await embeddingService.GetEmbeddingAsync(question);
-// float[1536] — same space as stored chunk vectors
-```
+**Why must it be the same model?**
 
-- Fast: < 100 ms
-- Cheap: fraction of a chat completion cost
-- Single API call regardless of document count
+Different models produce vectors in different mathematical spaces.  
+Comparing vectors from two different models would give meaningless distances.
+
+**Properties of this step:**
+- Very fast — typically under 100 milliseconds
+- Very cheap — a tiny fraction of a chat completion call
+- A single API call regardless of how many documents are stored
 
 ---
 
 <!-- SLIDE 14 — STEP 7: VECTOR SEARCH -->
-# Step 7 — Cosine Vector Search
+# Step 7 — Cosine Similarity Search
 
-`VectorSearchService` runs a ranked SQL query using SQL Server's native `VECTOR_DISTANCE`:
+The question vector is compared against all stored chunk vectors in SQL Server.
 
-```csharp
-var sqlVector = new SqlVector<float>(queryEmbedding);
+**SQL Server computes cosine distance natively** using the VECTOR_DISTANCE function.
 
-db.DocumentChunks
-  .Select(c => new {
-      // ...
-      Distance = EF.Functions.VectorDistance("cosine", c.Embedding, sqlVector)
-  })
-  .OrderBy(c => c.Distance)   // ascending = most similar first
-  .Take(5)
-```
+**How cosine distance works:**
 
-| Metric | Formula |
+| Metric | Meaning |
 |---|---|
-| Cosine distance | `1 − (A · B) / (‖A‖ · ‖B‖)` |
-| Relevance score | `1 − distance` (0 = unrelated, 1 = identical) |
+| Distance = 0 | Vectors are identical (perfect match) |
+| Distance = 1 | Vectors are completely unrelated |
+| Relevance = 1 − Distance | Higher is better |
+
+Results are **sorted by distance ascending** and the **top 5** most relevant chunks are returned.
 
 ---
 
 <!-- SLIDE 15 — STEP 8: BUILD THE PROMPT -->
 # Step 8 — Build the Grounding Prompt
 
-Retrieved chunks are assembled into a numbered source list:
+The retrieved chunks are assembled into a numbered source list:
 
 ```
 [Source 1: annual_report.pdf, Page 12]
@@ -328,58 +286,54 @@ Net revenue for fiscal year 2023 was $4.2 billion...
 Operating expenses were $1.8 billion...
 ```
 
-**System message constrains the model:**
+**The system message instructs the model:**
 
-```
-You are a document assistant.
-Answer questions ONLY from the provided sources.
-If the sources are insufficient, say so clearly.
-```
+> "Answer questions ONLY from the provided sources.  
+> If the sources are insufficient, say so clearly."
 
-> Without this constraint, the LLM fills gaps with training data — **hallucination**.
+**Why is this critical?**
+
+Without this constraint, the LLM fills missing gaps with its training data — producing answers that sound correct but are not grounded in the document. This is called **hallucination**.
 
 ---
 
 <!-- SLIDE 16 — STEP 9: GENERATE THE ANSWER -->
 # Step 9 — Generate the Answer with the LLM
 
-```csharp
-var messages = new List<ChatMessage>
-{
-    new(ChatRole.System, systemPrompt),
-    new(ChatRole.User,   $"Sources:\n{context}\n\nQuestion: {question}")
-};
+Two messages are sent to GPT-4o-mini:
 
-var response = await chatClient.GetResponseAsync(messages);
-var answer   = response.Text;
-```
+1. **System message** — contains the grounding instruction and the source chunks
+2. **User message** — contains the original question
 
-`IChatClient` is a **vendor-neutral abstraction** from `Microsoft.Extensions.AI`.
+**Model:** GPT-4o-mini (fast, cost-effective, sufficient for Q&A tasks)
 
-```csharp
-// Program.cs — swap model here without touching service code
-builder.Services.AddChatClient(
-    openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient());
-```
+**Abstraction benefit:**
+
+The service uses `IChatClient` from `Microsoft.Extensions.AI`.  
+This means the underlying model can be swapped — OpenAI, Azure OpenAI, Ollama — by changing a single registration line in Program.cs, with zero changes to service code.
 
 ---
 
 <!-- SLIDE 17 — STEP 10: RETURN WITH CITATIONS -->
 # Step 10 — Return Answer + Source Citations
 
-```json
+**Response structure:**
+
+```
 {
-  "answer": "Net revenue for FY2023 was $4.2 billion, a 14% year-over-year increase.",
-  "sources": [
-    { "documentName": "annual_report.pdf", "pageNumber": 12, "relevance": 0.9312 },
-    { "documentName": "annual_report.pdf", "pageNumber": 13, "relevance": 0.8874 }
+  answer:  "Net revenue for FY2023 was $4.2 billion...",
+  sources: [
+    { documentName: "annual_report.pdf", pageNumber: 12, relevance: 0.93 },
+    { documentName: "annual_report.pdf", pageNumber: 13, relevance: 0.88 }
   ]
 }
 ```
 
-- **`relevance`** — how confident the retrieval was (0–1)
-- Users can **verify answers** against the original document page
-- Builds **trust** and reduces hallucination risk perception
+**Why include sources?**
+
+- Users can open the original document and verify the answer
+- Relevance scores show how confident the retrieval was
+- Verifiable answers build trust and reduce hallucination risk perception
 
 ---
 
@@ -388,10 +342,10 @@ builder.Services.AddChatClient(
 
 | Decision | Why |
 |---|---|
-| SQL Server `VECTOR` type | Single DB, no extra infra. Scales to millions of chunks. |
+| SQL Server VECTOR type | No extra infrastructure needed. Scales to millions of chunks. |
 | 200-char overlap | Prevents information loss at chunk boundaries |
-| Same embedding model always | Cosine similarity only works in the same vector space |
-| `IChatClient` / `IEmbeddingGenerator` | Swap OpenAI → Azure / Ollama by changing one line |
+| Same embedding model always | Cosine similarity only works within the same vector space |
+| IChatClient / IEmbeddingGenerator | Swap providers by changing one registration line |
 | Batch size 20 | Stays within OpenAI rate limits with minimal latency |
 | System prompt constraint | Primary defence against hallucination |
 | Source citations in response | Verifiable answers, increased user trust |
@@ -401,23 +355,26 @@ builder.Services.AddChatClient(
 <!-- SLIDE 19 — COMPLETE FLOW -->
 # Complete Data Flow
 
-```
-═══ INGESTION ══════════════════════════════════════
-PDF upload → validate → save to disk
-         → PdfPig extract pages
-         → split chunks (1000/200 overlap)
-         → INSERT Document + DocumentChunks
-         → OpenAI embed (batch 20) → float[1536]
-         → UPDATE Embedding = SqlVector<float>
-         → 201 Created
+**Ingestion (once per document):**
 
-═══ QUERY ══════════════════════════════════════════
-POST /ask  → embed question → float[1536]
-          → VECTOR_DISTANCE cosine → top-5 chunks
-          → build [Source N: file, Page X] context
-          → ChatMessage(System) + ChatMessage(User)
-          → gpt-4o-mini → answer text
-          → 200 OK { answer, sources[] }
+```
+PDF upload → validate → save to disk
+         → extract text page by page
+         → split into overlapping chunks (1000 / 200)
+         → save Document + Chunks to SQL Server
+         → generate embeddings in batches of 20
+         → store vectors in Embedding column
+```
+
+**Query (per user request):**
+
+```
+User question
+  → embed question (same model)
+  → cosine search → top 5 chunks
+  → assemble [Source N: file, Page X] context
+  → System prompt + User message → GPT-4o-mini
+  → return { answer, sources[] }
 ```
 
 ---
@@ -427,14 +384,15 @@ POST /ask  → embed question → float[1536]
 
 **RAG = Retrieve first, then Generate**
 
-| Phase | Steps | Key Technology |
+| Phase | Steps | What happens |
 |---|---|---|
-| **Ingestion** | 1–5 | PdfPig, `IEmbeddingGenerator`, `VECTOR(1536)` |
-| **Query** | 6–10 | `VECTOR_DISTANCE`, `IChatClient`, GPT-4o-mini |
+| **Ingestion** | 1 – 5 | PDF → text → chunks → vectors → SQL Server |
+| **Query** | 6 – 10 | Question → vector → cosine search → LLM → answer |
 
-**Key takeaway:**  
-The embedding model is the **bridge** between ingestion and query.  
-Use the **same model** for both — always.
+**The golden rule:**
+
+> The embedding model is the **bridge** between ingestion and query.  
+> Use the **exact same model** for both — always.
 
 ---
 
@@ -444,19 +402,19 @@ Use the **same model** for both — always.
 | Layer | Technology |
 |---|---|
 | API | ASP.NET Core Minimal API (.NET 10) |
-| LLM | OpenAI `gpt-4o-mini` |
-| Embeddings | OpenAI `text-embedding-3-small` (1536-dim) |
-| Vector Store | SQL Server — native `VECTOR(1536)` column |
+| Language Model | OpenAI GPT-4o-mini |
+| Embedding Model | OpenAI text-embedding-3-small (1536 dimensions) |
+| Vector Store | SQL Server — native VECTOR column type |
 | PDF Parsing | PdfPig |
-| AI Abstractions | `Microsoft.Extensions.AI` (`IChatClient`, `IEmbeddingGenerator`) |
-| ORM | Entity Framework Core + `EF.Functions.VectorDistance` |
+| AI Abstractions | Microsoft.Extensions.AI (IChatClient, IEmbeddingGenerator) |
+| ORM | Entity Framework Core with VECTOR_DISTANCE support |
 
 ---
 
 <!-- SLIDE 22 — CLOSING -->
 # Thank You
 
-**Repository:** `Fcakiroglu16/MicrosoftAgentFrameworkPlayground`
+**Repository:** Fcakiroglu16/MicrosoftAgentFrameworkPlayground
 
 **Resources:**
 - [Microsoft.Extensions.AI docs](https://learn.microsoft.com/en-us/dotnet/ai/ai-extensions)

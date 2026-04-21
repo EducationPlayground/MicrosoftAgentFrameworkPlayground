@@ -29,7 +29,7 @@ public class VectorSearchService(AppDbContext db)
                 c.PageNumber,
                 c.ChunkIndex,
                 c.Document.OriginalFileName,
-                Distance = EF.Functions.VectorDistance("cosine", c.Embedding.GetValueOrDefault(), sqlVector)
+                Distance = EF.Functions.VectorDistance("cosine", c.Embedding!.Value, sqlVector)
             })
             .OrderBy(c => c.Distance)
             .Take(topN)
