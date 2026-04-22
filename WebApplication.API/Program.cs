@@ -8,6 +8,8 @@ using WebApplication.API.Services;
 
 var builder = global::Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 // OpenAPI
 builder.Services.AddOpenApi();
 
@@ -31,6 +33,8 @@ builder.Services.AddScoped<VectorSearchService>();
 builder.Services.AddScoped<RagService>();
 
 var app = builder.Build();
+
+app.MapDefaultEndpoints();
 
 app.MapScalarApiReference();
 // Configure the HTTP request pipeline

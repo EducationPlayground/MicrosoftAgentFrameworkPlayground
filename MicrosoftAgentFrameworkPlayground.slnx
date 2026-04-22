@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="MicrosoftAgentFrameworkPlayground.AppHost/MicrosoftAgentFrameworkPlayground.AppHost.csproj" Id="5b166007-7ae9-4704-b173-203493a2e033" />
+  <Project Path="MicrosoftAgentFrameworkPlayground.ServiceDefaults/MicrosoftAgentFrameworkPlayground.ServiceDefaults.csproj" />
   <Project Path="WebApplication.API/WebApplication.API.csproj" />
   <Project Path="WebApplication.RazorPages/WebApplication.RazorPages.csproj" Id="54651c03-bd89-4c48-ab1f-5155a51a993f" />
 </Solution>

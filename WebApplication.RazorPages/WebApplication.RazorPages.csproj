@@ -6,4 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MicrosoftAgentFrameworkPlayground.ServiceDefaults\MicrosoftAgentFrameworkPlayground.ServiceDefaults.csproj" />
+  </ItemGroup>
+
 </Project>
