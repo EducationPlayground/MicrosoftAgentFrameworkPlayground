@@ -85,4 +85,31 @@ public class RagService(
         new(ChatRole.System, SystemPrompt),
         new(ChatRole.User, $"Sources:\n{context}\nQuestion: {question}")
     ];
+
+    // -----------------------------------------------------------------------
+    // History-aware ask: injects prior conversation turns before the RAG user message
+    // -----------------------------------------------------------------------
+
+    public async Task<(string Answer, List<ChunkSearchResult> Sources)> AskWithHistoryAsync(
+        string question,
+        IList<ChatMessage> history,
+        int? documentId = null)
+    {
+        var questionEmbedding = await EmbedQuestionAsync(question);
+        var relevantChunks = await RetrieveRelevantChunksAsync(questionEmbedding, documentId);
+        if (relevantChunks.Count == 0)
+            return ("No relevant document content found. Please upload PDF documents first.", []);
+
+        var context = BuildContextFromChunks(relevantChunks);
+
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.System, SystemPrompt)
+        };
+        messages.AddRange(history);
+        messages.Add(new ChatMessage(ChatRole.User, $"Sources:\n{context}\nQuestion: {question}"));
+
+        var response = await chatClient.GetResponseAsync(messages);
+        return (response.Text, relevantChunks);
+    }
 }

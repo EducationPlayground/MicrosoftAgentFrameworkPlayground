@@ -19,49 +19,94 @@ public class ChatModel : PageModel
     [BindProperty]
     public int? DocumentId { get; set; }
 
-    public string? Answer { get; set; }
+    [BindProperty]
+    public Guid? SessionId { get; set; }
 
-    public List<SourceReferenceDto> Sources { get; set; } = new();
+    public List<ChatMessageDto> Messages { get; set; } = new();
 
     public string? ErrorMessage { get; set; }
 
-    public void OnGet() { }
+    public async Task OnGetAsync()
+    {
+        var client = _httpClientFactory.CreateClient("ChatApi");
+        var response = await client.PostAsJsonAsync("/api/chat/sessions", new { documentId = DocumentId });
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<CreateSessionResponseDto>();
+            SessionId = result?.SessionId;
+        }
+    }
 
     public async Task<IActionResult> OnPostAsync()
     {
         if (string.IsNullOrWhiteSpace(Question))
         {
             ErrorMessage = "Please enter a question.";
+            await LoadMessagesAsync();
+            return Page();
+        }
+
+        if (SessionId is null)
+        {
+            ErrorMessage = "Session expired. Please refresh the page.";
             return Page();
         }
 
         var client = _httpClientFactory.CreateClient("ChatApi");
 
-        var requestBody = new { question = Question, documentId = DocumentId };
-
         try
         {
-            var response = await client.PostAsJsonAsync("/api/chat/ask", requestBody);
+            var response = await client.PostAsJsonAsync(
+                $"/api/chat/sessions/{SessionId}/messages",
+                new { question = Question });
 
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<AskQuestionResponseDto>();
-                Answer = result?.Answer;
-                Sources = result?.Sources ?? new List<SourceReferenceDto>();
-            }
-            else
-            {
+            if (!response.IsSuccessStatusCode)
                 ErrorMessage = $"API error: {(int)response.StatusCode} {response.ReasonPhrase}";
-            }
         }
         catch (HttpRequestException ex)
         {
             ErrorMessage = $"Failed to connect to API: {ex.Message}";
         }
 
+        Question = string.Empty;
+        await LoadMessagesAsync();
         return Page();
     }
+
+    private async Task LoadMessagesAsync()
+    {
+        if (SessionId is null) return;
+
+        var client = _httpClientFactory.CreateClient("ChatApi");
+        try
+        {
+            var response = await client.GetAsync($"/api/chat/sessions/{SessionId}/messages");
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<SessionMessagesResponseDto>();
+                Messages = result?.Messages ?? new();
+            }
+        }
+        catch (HttpRequestException) { /* silently ignore, Messages stays empty */ }
+    }
 }
+
+public record CreateSessionResponseDto(
+    [property: JsonPropertyName("sessionId")] Guid SessionId,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt
+);
+
+public record SessionMessagesResponseDto(
+    [property: JsonPropertyName("sessionId")] Guid SessionId,
+    [property: JsonPropertyName("messages")] List<ChatMessageDto> Messages
+);
+
+public record ChatMessageDto(
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("content")] string Content,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
+    [property: JsonPropertyName("sources")] List<SourceReferenceDto>? Sources
+);
 
 public record AskQuestionResponseDto(
     [property: JsonPropertyName("answer")] string Answer,
@@ -73,3 +118,4 @@ public record SourceReferenceDto(
     [property: JsonPropertyName("pageNumber")] int PageNumber,
     [property: JsonPropertyName("relevance")] double Relevance
 );
+

@@ -33,6 +33,7 @@ builder.Services.AddScoped<LlmChunkingService>();
 builder.Services.AddScoped<EmbeddingService>();
 builder.Services.AddScoped<VectorSearchService>();
 builder.Services.AddScoped<RagService>();
+builder.Services.AddScoped<ChatHistoryService>();
 
 var app = builder.Build();
 

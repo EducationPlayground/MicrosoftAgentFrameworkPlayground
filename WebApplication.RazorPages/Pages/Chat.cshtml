@@ -4,39 +4,77 @@
     ViewData["Title"] = "Q & A";
 }
 
+<style>
+    .chat-window {
+        height: 60vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+
+    .bubble-row {
+        display: flex;
+    }
+
+    .bubble-row.user {
+        justify-content: flex-end;
+    }
+
+    .bubble-row.assistant {
+        justify-content: flex-start;
+    }
+
+    .bubble {
+        max-width: 75%;
+        padding: 10px 14px;
+        border-radius: 16px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.95rem;
+    }
+
+    .bubble.user {
+        background-color: #0d6efd;
+        color: #fff;
+        border-bottom-right-radius: 4px;
+    }
+
+    .bubble.assistant {
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        color: #212529;
+        border-bottom-left-radius: 4px;
+    }
+
+    .sources-toggle {
+        font-size: 0.8rem;
+        margin-top: 6px;
+        cursor: pointer;
+        color: #6c757d;
+        text-decoration: underline;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+
+    .sources-toggle:hover {
+        color: #343a40;
+    }
+</style>
+
 <div class="container mt-4">
-    <h2 class="mb-4">
-        <i class="bi bi-chat-dots"></i> Document Q &amp; A
-    </h2>
-
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <form method="post">
-                <div class="mb-3">
-                    <label asp-for="Question" class="form-label fw-semibold">Your Question</label>
-                    <textarea asp-for="Question"
-                              class="form-control"
-                              rows="3"
-                              placeholder="Type your question about the document here..."
-                              required></textarea>
-                    <span asp-validation-for="Question" class="text-danger"></span>
-                </div>
-
-                <div class="mb-3">
-                    <label asp-for="DocumentId" class="form-label fw-semibold">
-                        Document ID <span class="text-muted fw-normal">(optional)</span>
-                    </label>
-                    <input asp-for="DocumentId"
-                           type="number"
-                           class="form-control"
-                           placeholder="Enter an ID for a specific document, or leave blank to search all documents" />
-                </div>
-
-                <button type="submit" class="btn btn-primary px-4">
-                    <span>Submit</span>
-                </button>
-            </form>
-        </div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="mb-0">
+            <i class="bi bi-chat-dots"></i> Document Q &amp; A
+        </h2>
+        <a href="/Chat" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-plus-circle"></i> Yeni Sohbet
+        </a>
     </div>
 
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
@@ -46,51 +84,89 @@
         </div>
     }
 
-    @if (!string.IsNullOrEmpty(Model.Answer))
-    {
-        <div class="card border-success shadow-sm mb-4">
-            <div class="card-header bg-success text-white fw-semibold">
-                Answer
-            </div>
-            <div class="card-body">
-                <p class="mb-0" style="white-space: pre-wrap;">@Model.Answer</p>
-            </div>
-        </div>
-
-        @if (Model.Sources.Count > 0)
+    <div class="chat-window mb-3" id="chatWindow">
+        @if (Model.Messages.Count == 0)
         {
-            <div class="card shadow-sm">
-                <div class="card-header fw-semibold">
-                    Sources
-                </div>
-                <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Document Name</th>
-                                <th>Page</th>
-                                <th>Relevance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var source in Model.Sources)
-                            {
-                                <tr>
-                                    <td>@source.DocumentName</td>
-                                    <td>@source.PageNumber</td>
-                                    <td>
-                                        <span class="badge bg-secondary">@source.Relevance.ToString("P1")</span>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+            <div class="text-center text-muted my-auto">
+                <i class="bi bi-chat-left-text fs-2"></i>
+                <p class="mt-2">Belgeleriniz hakkında bir soru sorun.</p>
+            </div>
+        }
+
+        @foreach (var (msg, idx) in Model.Messages.Select((m, i) => (m, i)))
+        {
+            <div class="bubble-row @msg.Role">
+                <div>
+                    <div class="bubble @msg.Role">@msg.Content</div>
+
+                    @if (msg.Role == "assistant" && msg.Sources is { Count: > 0 })
+                    {
+                        var collapseId = $"sources-{idx}";
+                        <button class="sources-toggle" type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#@collapseId"
+                                aria-expanded="false">
+                            @msg.Sources.Count kaynak göster ▾
+                        </button>
+                        <div class="collapse mt-1" id="@collapseId">
+                            <table class="table table-sm table-bordered mb-0" style="font-size:0.8rem; background:#fff;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Belge</th>
+                                        <th>Sayfa</th>
+                                        <th>İlgi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var src in msg.Sources)
+                                    {
+                                        <tr>
+                                            <td>@src.DocumentName</td>
+                                            <td>@src.PageNumber</td>
+                                            <td><span class="badge bg-secondary">@src.Relevance.ToString("P1")</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
             </div>
         }
-    }
+    </div>
+
+    <form method="post" id="chatForm">
+        <input type="hidden" asp-for="SessionId" />
+        <input type="hidden" asp-for="DocumentId" />
+
+        <div class="input-group">
+            <textarea asp-for="Question"
+                      class="form-control"
+                      rows="2"
+                      placeholder="Sorunuzu buraya yazın..."
+                      required
+                      id="questionInput"></textarea>
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-send"></i>
+            </button>
+        </div>
+        <span asp-validation-for="Question" class="text-danger small"></span>
+    </form>
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Scroll to bottom of chat window on load
+        const chatWindow = document.getElementById('chatWindow');
+        if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        // Submit on Ctrl+Enter / Cmd+Enter
+        document.getElementById('questionInput')?.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                document.getElementById('chatForm').submit();
+            }
+        });
+    </script>
 }
+
