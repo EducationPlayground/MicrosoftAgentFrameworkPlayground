@@ -7,8 +7,7 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddHttpClient("ChatApi", client =>
 {
-    var baseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5191";
-    client.BaseAddress = new Uri(baseUrl);
+    client.BaseAddress = new Uri("http://webapplication-api");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 

@@ -1,7 +1,9 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.WebApplication_API>("webapplication-api");
+var api = builder.AddProject<Projects.WebApplication_API>("webapplication-api");
 
-builder.AddProject<Projects.WebApplication_RazorPages>("webapplication-razorpages");
+builder.AddProject<Projects.WebApplication_RazorPages>("webapplication-razorpages")
+    .WithReference(api)
+    .WaitFor(api);
 
 builder.Build().Run();

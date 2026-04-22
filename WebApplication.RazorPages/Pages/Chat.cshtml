@@ -1,39 +1,39 @@
 @page
 @model ChatModel
 @{
-    ViewData["Title"] = "Soru & Cevap";
+    ViewData["Title"] = "Q & A";
 }
 
 <div class="container mt-4">
     <h2 class="mb-4">
-        <i class="bi bi-chat-dots"></i> Belge Soru &amp; Cevap
+        <i class="bi bi-chat-dots"></i> Document Q &amp; A
     </h2>
 
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <form method="post">
                 <div class="mb-3">
-                    <label asp-for="Question" class="form-label fw-semibold">Sorunuz</label>
+                    <label asp-for="Question" class="form-label fw-semibold">Your Question</label>
                     <textarea asp-for="Question"
                               class="form-control"
                               rows="3"
-                              placeholder="Belgeyle ilgili sorunuzu buraya yazın..."
+                              placeholder="Type your question about the document here..."
                               required></textarea>
                     <span asp-validation-for="Question" class="text-danger"></span>
                 </div>
 
                 <div class="mb-3">
                     <label asp-for="DocumentId" class="form-label fw-semibold">
-                        Belge ID <span class="text-muted fw-normal">(isteğe bağlı)</span>
+                        Document ID <span class="text-muted fw-normal">(optional)</span>
                     </label>
                     <input asp-for="DocumentId"
                            type="number"
                            class="form-control"
-                           placeholder="Belirli bir belge için ID girin, boş bırakırsanız tüm belgeler aranır" />
+                           placeholder="Enter an ID for a specific document, or leave blank to search all documents" />
                 </div>
 
                 <button type="submit" class="btn btn-primary px-4">
-                    <span>Gönder</span>
+                    <span>Submit</span>
                 </button>
             </form>
         </div>
@@ -42,7 +42,7 @@
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert alert-danger" role="alert">
-            <strong>Hata:</strong> @Model.ErrorMessage
+            <strong>Error:</strong> @Model.ErrorMessage
         </div>
     }
 
@@ -50,7 +50,7 @@
     {
         <div class="card border-success shadow-sm mb-4">
             <div class="card-header bg-success text-white fw-semibold">
-                Yanıt
+                Answer
             </div>
             <div class="card-body">
                 <p class="mb-0" style="white-space: pre-wrap;">@Model.Answer</p>
@@ -61,15 +61,15 @@
         {
             <div class="card shadow-sm">
                 <div class="card-header fw-semibold">
-                    Kaynaklar
+                    Sources
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th>Belge Adı</th>
-                                <th>Sayfa</th>
-                                <th>İlgililik</th>
+                                <th>Document Name</th>
+                                <th>Page</th>
+                                <th>Relevance</th>
                             </tr>
                         </thead>
                         <tbody>
