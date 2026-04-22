@@ -32,23 +32,23 @@ public static class DocumentEndpoints
         IWebHostEnvironment env,
         CancellationToken cancellationToken)
     {
-        // Adım 0 – doğrulama
+        // Step 0 – Validation
         var validationError = ValidateUploadedFile(file);
         if (validationError is not null)
             return validationError;
 
-        // Adım 1 – dosyayı diske kaydet
+        // Step 1 – Save file to disk
         var filePath = await SaveFileToDiskAsync(file, env.WebRootPath, cancellationToken);
 
-        // Adım 2 – PDF'den sayfa metinlerini çıkar, LLM ile semantik parçalara böl
+        // Step 2 – Extract page texts from PDF, split into semantic chunks with LLM
         var (pageCount, chunks) = await ExtractAndChunkPagesAsync(filePath, pdfService, chunkingService, cancellationToken);
         if (chunks.Count == 0)
-            return Results.BadRequest("PDF dosyasından metin çıkarılamadı.");
+            return Results.BadRequest("Could not extract text from PDF.");
 
-        // Adım 3 – Belge ve parçaları veritabanına kaydet
+        // Step 3 – Save document and chunks to database
         var (document, chunkEntities) = await SaveDocumentAndChunksAsync(filePath, file.FileName, pageCount, chunks, db, cancellationToken);
 
-        // Adım 4 – Her parça için embedding üret, vektör sütununu güncelle
+        // Step 4 – Generate embedding for each chunk, update vector column
         await IndexChunkEmbeddingsAsync(chunkEntities, embeddingService, vectorSearchService);
 
         return Results.Created($"/api/documents/{document.Id}", ToUploadResponse(document));
@@ -86,19 +86,19 @@ public static class DocumentEndpoints
     }
 
     // -----------------------------------------------------------------------
-    // Adım 0 – Doğrulama
+    // Step 0 – Validation
     // -----------------------------------------------------------------------
 
     private static IResult? ValidateUploadedFile(IFormFile file)
     {
         if (file.Length == 0 || !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-            return Results.BadRequest("Sadece PDF dosyaları yüklenebilir.");
+            return Results.BadRequest("Only PDF files can be uploaded.");
 
         return null;
     }
 
     // -----------------------------------------------------------------------
-    // Adım 1 – Dosyayı diske kaydet
+    // Step 1 – Save file to disk
     // -----------------------------------------------------------------------
 
     private static async Task<string> SaveFileToDiskAsync(IFormFile file, string webRootPath, CancellationToken cancellationToken)
@@ -116,7 +116,7 @@ public static class DocumentEndpoints
     }
 
     // -----------------------------------------------------------------------
-    // Adım 2 – PDF'i oku → sayfaları çıkar → LLM ile parçala
+    // Step 2 – Read PDF → extract pages → split with LLM
     // -----------------------------------------------------------------------
 
     private static async Task<(int PageCount, List<(string Content, int PageNumber)> Chunks)> ExtractAndChunkPagesAsync(
@@ -145,7 +145,7 @@ public static class DocumentEndpoints
     }
 
     // -----------------------------------------------------------------------
-    // Adım 3 – Belge ve parçaları veritabanına kaydet
+    // Step 3 – Save document and chunks to database
     // -----------------------------------------------------------------------
 
     private static async Task<(Document Document, List<DocumentChunk> Chunks)> SaveDocumentAndChunksAsync(
@@ -200,7 +200,7 @@ public static class DocumentEndpoints
     }
 
     // -----------------------------------------------------------------------
-    // Adım 4 – Embedding üret → vektör sütununa yaz
+    // Step 4 – Generate embeddings → write to vector column
     // -----------------------------------------------------------------------
 
     private static async Task IndexChunkEmbeddingsAsync(
@@ -216,7 +216,7 @@ public static class DocumentEndpoints
     }
 
     // -----------------------------------------------------------------------
-    // Yardımcılar
+    // Helpers
     // -----------------------------------------------------------------------
 
     private static void DeleteFileFromDisk(string fileName, string webRootPath)

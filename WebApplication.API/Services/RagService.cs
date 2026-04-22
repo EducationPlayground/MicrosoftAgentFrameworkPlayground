@@ -9,49 +9,49 @@ public class RagService(
     VectorSearchService vectorSearchService)
 {
     private const string SystemPrompt = """
-        Sen bir kurumsal döküman asistanısın. Sana verilen kaynak içeriklerine dayanarak soruları yanıtla.
-        Kurallar:
-        - Sadece verilen kaynaklardan bilgi kullan
-        - Eğer kaynaklar soruyu yanıtlamak için yeterli değilse, bunu belirt
-        - Yanıtlarını Türkçe olarak ver
-        - Kısa ve öz yanıtlar ver
+        You are a corporate document assistant. Answer questions based on the source content provided to you.
+        Rules:
+        - Use only information from the provided sources
+        - If the sources are insufficient to answer the question, state this clearly
+        - Keep answers concise and focused
+        - Provide accurate citations from the source documents
         """;
 
     public async Task<(string Answer, List<ChunkSearchResult> Sources)> AskAsync(string question, int? documentId = null)
     {
-        // Adım 1 – Soruyu vektöre dönüştür
+        // Step 1 – Convert question to embedding vector
         var questionEmbedding = await EmbedQuestionAsync(question);
 
-        // Adım 2 – Vektör veritabanında benzer parçaları bul
+        // Step 2 – Find similar chunks from vector database
         var relevantChunks = await RetrieveRelevantChunksAsync(questionEmbedding, documentId);
         if (relevantChunks.Count == 0)
-            return ("İlgili döküman içeriği bulunamadı. Lütfen önce PDF dökümanlarını yükleyin.", []);
+            return ("No relevant document content found. Please upload PDF documents first.", []);
 
-        // Adım 3 – Parçalardan LLM için bağlam metni oluştur
+        // Step 3 – Build context text from chunks for LLM
         var context = BuildContextFromChunks(relevantChunks);
 
-        // Adım 4 – LLM ile yanıt üret
+        // Step 4 – Generate answer with LLM
         var answer = await GenerateAnswerAsync(context, question);
 
         return (answer, relevantChunks);
     }
 
     // -----------------------------------------------------------------------
-    // Adım 1 – Soruyu embedding vektörüne dönüştür
+    // Step 1 – Convert question to embedding vector
     // -----------------------------------------------------------------------
 
     private async Task<float[]> EmbedQuestionAsync(string question) =>
         await embeddingService.GetEmbeddingAsync(question);
 
     // -----------------------------------------------------------------------
-    // Adım 2 – En yakın parçaları vektör veritabanından getir
+    // Step 2 – Retrieve nearest chunks from vector database
     // -----------------------------------------------------------------------
 
     private async Task<List<ChunkSearchResult>> RetrieveRelevantChunksAsync(float[] questionEmbedding, int? documentId) =>
         await vectorSearchService.SearchSimilarChunksAsync(questionEmbedding, topN: 5, documentId);
 
     // -----------------------------------------------------------------------
-    // Adım 3 – Chunk listesini LLM'e gönderilebilir kaynak metnine çevir
+    // Step 3 – Convert chunk list to source text for LLM
     // -----------------------------------------------------------------------
 
     private static string BuildContextFromChunks(List<ChunkSearchResult> chunks)
@@ -61,7 +61,7 @@ public class RagService(
         for (var i = 0; i < chunks.Count; i++)
         {
             var chunk = chunks[i];
-            sb.AppendLine($"[Kaynak {i + 1}: {chunk.DocumentName}, Sayfa {chunk.PageNumber}]");
+            sb.AppendLine($"[Source {i + 1}: {chunk.DocumentName}, Page {chunk.PageNumber}]");
             sb.AppendLine(chunk.Content);
             sb.AppendLine();
         }
@@ -70,7 +70,7 @@ public class RagService(
     }
 
     // -----------------------------------------------------------------------
-    // Adım 4 – LLM'e bağlamı ve soruyu gönder, yanıt al
+    // Step 4 – Send context and question to LLM, retrieve answer
     // -----------------------------------------------------------------------
 
     private async Task<string> GenerateAnswerAsync(string context, string question)
@@ -83,6 +83,6 @@ public class RagService(
     private static List<ChatMessage> BuildRagMessages(string context, string question) =>
     [
         new(ChatRole.System, SystemPrompt),
-        new(ChatRole.User, $"Kaynaklar:\n{context}\nSoru: {question}")
+        new(ChatRole.User, $"Sources:\n{context}\nQuestion: {question}")
     ];
 }

@@ -1,31 +1,31 @@
 @WebApplication.API_HostAddress = http://localhost:5191
 
-### Tüm Dökümanları Listele
+### List All Documents
 GET {{WebApplication.API_HostAddress}}/api/documents
 Accept: application/json
 
-### Döküman Detayı
+### Document Details
 GET {{WebApplication.API_HostAddress}}/api/documents/1
 Accept: application/json
 
-### Soru Sor (Tüm Dökümanlarda)
+### Ask Question (All Documents)
 POST {{WebApplication.API_HostAddress}}/api/chat/ask
 Content-Type: application/json
 
 {
-  "question": "Bu dökümanların konusu nedir?"
+  "question": "What is the subject of these documents?"
 }
 
-### Soru Sor (Belirli Dökümanda)
+### Ask Question (Specific Document)
 POST {{WebApplication.API_HostAddress}}/api/chat/ask
 Content-Type: application/json
 
 {
-  "question": "Bu dökümanın ana konusu nedir?",
+  "question": "What is the main subject of this document?",
   "documentId": 1
 }
 
-### Döküman Sil
+### Delete Document
 DELETE {{WebApplication.API_HostAddress}}/api/documents/1
 
 ###

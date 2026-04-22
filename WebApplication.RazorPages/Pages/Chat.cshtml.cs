@@ -31,7 +31,7 @@ public class ChatModel : PageModel
     {
         if (string.IsNullOrWhiteSpace(Question))
         {
-            ErrorMessage = "Lütfen bir soru girin.";
+            ErrorMessage = "Please enter a question.";
             return Page();
         }
 
@@ -51,12 +51,12 @@ public class ChatModel : PageModel
             }
             else
             {
-                ErrorMessage = $"API hatası: {(int)response.StatusCode} {response.ReasonPhrase}";
+                ErrorMessage = $"API error: {(int)response.StatusCode} {response.ReasonPhrase}";
             }
         }
         catch (HttpRequestException ex)
         {
-            ErrorMessage = $"API'ye bağlanılamadı: {ex.Message}";
+            ErrorMessage = $"Failed to connect to API: {ex.Message}";
         }
 
         return Page();

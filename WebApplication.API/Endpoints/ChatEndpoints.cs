@@ -15,7 +15,7 @@ public static class ChatEndpoints
     private static async Task<IResult> Ask(AskQuestionRequest request, RagService ragService)
     {
         if (string.IsNullOrWhiteSpace(request.Question))
-            return Results.BadRequest("Soru boş olamaz.");
+            return Results.BadRequest("Question cannot be empty.");
 
         var (answer, sources) = await ragService.AskAsync(request.Question, request.DocumentId);
 
