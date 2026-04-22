@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using MicrosoftAgentFrameworkPlayground.ServiceDefaults;
 using OpenAI;
 using Scalar.AspNetCore;
 using WebApplication.API.Data;

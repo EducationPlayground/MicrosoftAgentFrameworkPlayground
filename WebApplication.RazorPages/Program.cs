@@ -1,3 +1,5 @@
+using MicrosoftAgentFrameworkPlayground.ServiceDefaults;
+
 var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();

@@ -1,15 +1,26 @@
-@WebApplication.API_HostAddress = http://localhost:5191
+@WebApplicationAPI_HostAddress = http://localhost:5191
+
+### Upload Document
+POST {{WebApplicationAPI_HostAddress}}/api/documents/upload
+Content-Type: multipart/form-data; boundary=----FormBoundary
+
+------FormBoundary
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./sample.pdf
+------FormBoundary--
 
 ### List All Documents
-GET {{WebApplication.API_HostAddress}}/api/documents
+GET {{WebApplicationAPI_HostAddress}}/api/documents
 Accept: application/json
 
 ### Document Details
-GET {{WebApplication.API_HostAddress}}/api/documents/1
+GET {{WebApplicationAPI_HostAddress}}/api/documents/1
 Accept: application/json
 
 ### Ask Question (All Documents)
-POST {{WebApplication.API_HostAddress}}/api/chat/ask
+POST {{WebApplicationAPI_HostAddress}}/api/chat/ask
 Content-Type: application/json
 
 {
@@ -17,7 +28,7 @@ Content-Type: application/json
 }
 
 ### Ask Question (Specific Document)
-POST {{WebApplication.API_HostAddress}}/api/chat/ask
+POST {{WebApplicationAPI_HostAddress}}/api/chat/ask
 Content-Type: application/json
 
 {
@@ -26,6 +37,6 @@ Content-Type: application/json
 }
 
 ### Delete Document
-DELETE {{WebApplication.API_HostAddress}}/api/documents/1
+DELETE {{WebApplicationAPI_HostAddress}}/api/documents/1
 
 ###
