@@ -5,50 +5,24 @@ namespace WebApplication.API.Services;
 
 public class PdfProcessingService
 {
-    private const int MaxChunkSize = 1000;
-    private const int OverlapSize = 200;
-
-    public (int PageCount, List<(string Content, int PageNumber)> Chunks) ExtractChunks(Stream pdfStream)
+    public (int PageCount, List<PdfPageText> Pages) ExtractPages(Stream pdfStream)
     {
-        var allChunks = new List<(string Content, int PageNumber)>();
+        var pages = new List<PdfPageText>();
 
         using var document = PdfDocument.Open(pdfStream);
         var pageCount = document.NumberOfPages;
 
         foreach (Page page in document.GetPages())
         {
-            var text = page.Text;
+            var text = page.Text?.Trim();
             if (string.IsNullOrWhiteSpace(text))
                 continue;
 
-            var chunks = SplitIntoChunks(text.Trim());
-            foreach (var chunk in chunks)
-            {
-                allChunks.Add((chunk, page.Number));
-            }
+            pages.Add(new PdfPageText(page.Number, text));
         }
 
-        return (pageCount, allChunks);
-    }
-
-    private static List<string> SplitIntoChunks(string text)
-    {
-        var chunks = new List<string>();
-        if (text.Length <= MaxChunkSize)
-        {
-            chunks.Add(text);
-            return chunks;
-        }
-
-        var start = 0;
-        while (start < text.Length)
-        {
-            var length = Math.Min(MaxChunkSize, text.Length - start);
-            var chunk = text.Substring(start, length);
-            chunks.Add(chunk);
-            start += MaxChunkSize - OverlapSize;
-        }
-
-        return chunks;
+        return (pageCount, pages);
     }
 }
+
+public record PdfPageText(int PageNumber, string Content);

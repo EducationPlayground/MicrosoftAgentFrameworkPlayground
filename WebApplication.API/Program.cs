@@ -28,6 +28,7 @@ builder.Services.AddEmbeddingGenerator(openAiClient.GetEmbeddingClient("text-emb
 
 // Services
 builder.Services.AddSingleton<PdfProcessingService>();
+builder.Services.AddScoped<LlmChunkingService>();
 builder.Services.AddScoped<EmbeddingService>();
 builder.Services.AddScoped<VectorSearchService>();
 builder.Services.AddScoped<RagService>();
