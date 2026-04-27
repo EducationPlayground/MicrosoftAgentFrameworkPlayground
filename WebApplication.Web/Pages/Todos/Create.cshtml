@@ -1,0 +1,22 @@
+@page
+@model WebApplication.Web.Pages.Todos.CreateModel
+@{
+    ViewData["Title"] = "Create Todo";
+}
+
+<h1>Create Todo</h1>
+
+<div class="row">
+    <div class="col-md-4">
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="mb-3">
+                <label asp-for="Title" class="form-label">Title</label>
+                <input asp-for="Title" class="form-control" placeholder="Enter todo title" />
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-primary">Create</button>
+            <a asp-page="Index" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>

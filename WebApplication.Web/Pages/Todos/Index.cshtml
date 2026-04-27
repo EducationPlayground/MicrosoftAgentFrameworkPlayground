@@ -1,0 +1,60 @@
+@page
+@model WebApplication.Web.Pages.Todos.IndexModel
+@{
+    ViewData["Title"] = "Todos";
+}
+
+<h1>Todos</h1>
+
+<p>
+    <a asp-page="Create" class="btn btn-primary">New Todo</a>
+</p>
+
+@if (!Model.Todos.Any())
+{
+    <p class="text-muted">No todos yet. Create one!</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var todo in Model.Todos)
+            {
+                <tr class="@(todo.IsCompleted ? "table-success" : "")">
+                    <td>
+                        @if (todo.IsCompleted)
+                        {
+                            <s>@todo.Title</s>
+                        }
+                        else
+                        {
+                            @todo.Title
+                        }
+                    </td>
+                    <td>@(todo.IsCompleted ? "Completed" : "Pending")</td>
+                    <td>@todo.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>
+                        <form method="post" asp-page-handler="Toggle" asp-route-id="@todo.Id" class="d-inline">
+                            <button type="submit" class="btn btn-sm @(todo.IsCompleted ? "btn-secondary" : "btn-success")">
+                                @(todo.IsCompleted ? "Undo" : "Complete")
+                            </button>
+                        </form>
+                        <a asp-page="Edit" asp-route-id="@todo.Id" class="btn btn-sm btn-warning">Edit</a>
+                        <form method="post" asp-page-handler="Delete" asp-route-id="@todo.Id" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    onclick="return confirm('Delete this todo?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

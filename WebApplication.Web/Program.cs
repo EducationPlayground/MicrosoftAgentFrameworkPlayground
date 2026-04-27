@@ -4,6 +4,7 @@ builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddHttpClient("TodoApi", c => c.BaseAddress = new Uri("http://webapplication-api"));
 
 var app = builder.Build();
 

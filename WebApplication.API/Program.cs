@@ -3,6 +3,7 @@ using Microsoft.Extensions.AI;
 using OpenAI;
 using Scalar.AspNetCore;
 using WebApplication.API.Data;
+using WebApplication.API.Endpoints;
 
 
 var builder = global::Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
@@ -32,5 +33,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapTodoEndpoints();
 
 app.Run();
