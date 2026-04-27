@@ -24,4 +24,13 @@
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Data\Entities\" />
+    <Folder Include="Endpoints\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WebApplication.ServiceDefaults\WebApplication.ServiceDefaults.csproj" />
+  </ItemGroup>
+
 </Project>
