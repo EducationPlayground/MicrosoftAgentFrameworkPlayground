@@ -4,7 +4,6 @@ using OpenAI;
 using Scalar.AspNetCore;
 using WebApplication.API.Data;
 using WebApplication.API.Endpoints;
-using WebApplication.API.Services;
 
 var builder = global::Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
@@ -21,14 +20,9 @@ var openAiKey = Environment.GetEnvironmentVariable("OPEN_AI_KEY")
 
 var openAiClient = new OpenAIClient(openAiKey);
 
-builder.Services.AddChatClient(openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient());
-builder.Services.AddEmbeddingGenerator(openAiClient.GetEmbeddingClient("text-embedding-3-small").AsIEmbeddingGenerator());
-
-// Services
-builder.Services.AddSingleton<PdfProcessingService>();
-builder.Services.AddScoped<EmbeddingService>();
-builder.Services.AddScoped<VectorSearchService>();
-builder.Services.AddScoped<RagService>();
+// Embedding generator (text-embedding-ada-002 → 1536 boyut)
+builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(
+    openAiClient.GetEmbeddingClient("text-embedding-ada-002").AsIEmbeddingGenerator());
 
 var app = builder.Build();
 
@@ -39,8 +33,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// Map endpoints
-app.MapDocumentEndpoints();
-app.MapChatEndpoints();
+app.MapProductEndpoints();
 
 app.Run();

@@ -1,31 +1,11 @@
 @WebApplication.API_HostAddress = http://localhost:5191
 
-### Tüm Dökümanları Listele
-GET {{WebApplication.API_HostAddress}}/api/documents
+### Seed Products
+POST {{WebApplication.API_HostAddress}}/products/seed
 Accept: application/json
 
-### Döküman Detayı
-GET {{WebApplication.API_HostAddress}}/api/documents/1
+### Search Products
+GET {{WebApplication.API_HostAddress}}/products/search?q=wireless audio
 Accept: application/json
-
-### Soru Sor (Tüm Dökümanlarda)
-POST {{WebApplication.API_HostAddress}}/api/chat/ask
-Content-Type: application/json
-
-{
-  "question": "Bu dökümanların konusu nedir?"
-}
-
-### Soru Sor (Belirli Dökümanda)
-POST {{WebApplication.API_HostAddress}}/api/chat/ask
-Content-Type: application/json
-
-{
-  "question": "Bu dökümanın ana konusu nedir?",
-  "documentId": 1
-}
-
-### Döküman Sil
-DELETE {{WebApplication.API_HostAddress}}/api/documents/1
 
 ###

@@ -13,8 +13,8 @@ using WebApplication.API.Data;
 namespace WebApplication.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260421143102_initial2")]
-    partial class initial2
+    [Migration("20260427211614_AddProductVectorSearch")]
+    partial class AddProductVectorSearch
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -87,6 +87,27 @@ namespace WebApplication.API.Migrations
                     b.HasIndex("DocumentId");
 
                     b.ToTable("DocumentChunks");
+                });
+
+            modelBuilder.Entity("WebApplication.API.Data.Entities.Product", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<SqlVector<float>?>("Embedding")
+                        .HasColumnType("vector(1536)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("WebApplication.API.Data.Entities.DocumentChunk", b =>
