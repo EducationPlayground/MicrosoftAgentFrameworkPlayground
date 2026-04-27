@@ -8,4 +8,8 @@ Accept: application/json
 GET {{WebApplication.API_HostAddress}}/products/search?q=wireless audio
 Accept: application/json
 
+### Hybrid Search Products
+GET {{WebApplication.API_HostAddress}}/products/hybrid-search?q=wireless audio
+Accept: application/json
+
 ###

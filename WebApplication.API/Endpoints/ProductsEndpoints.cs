@@ -82,5 +82,55 @@ public static class ProductsEndpoints
             return Results.Ok(results);
         })
         .WithSummary("Performs semantic search over product names");
+
+        // GET /products/hybrid-search?q=... — hybrid search (vector + keyword, RRF)
+        group.MapGet("/hybrid-search", async (
+            string q,
+            AppDbContext dbContext,
+            IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator) =>
+        {
+            // 1. Generate query embedding
+            var queryResult = await embeddingGenerator.GenerateAsync([q]);
+            var queryVector = new SqlVector<float>(queryResult[0].Vector);
+
+            // 2. Vector search — semantic ranking by cosine distance
+            var vectorResults = await dbContext.Products
+                .Where(p => p.Embedding != null)
+                .OrderBy(p => EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector))
+                .Take(20)
+                .Select(p => new { p.Id, p.Name })
+                .ToListAsync();
+
+            // 3. Keyword search — lexical ranking using Contains (translates to LIKE '%...%')
+            var keywords = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var keywordResults = await dbContext.Products
+                .Where(p => keywords.Any(kw => p.Name.Contains(kw)))
+                .Select(p => new { p.Id, p.Name })
+                .Take(20)
+                .ToListAsync();
+
+            // 4. Reciprocal Rank Fusion (RRF, k=60)
+            const double k = 60.0;
+            var scores = new Dictionary<int, double>();
+
+            for (var i = 0; i < vectorResults.Count; i++)
+                scores[vectorResults[i].Id] = scores.GetValueOrDefault(vectorResults[i].Id) + 1.0 / (k + i + 1);
+
+            for (var i = 0; i < keywordResults.Count; i++)
+                scores[keywordResults[i].Id] = scores.GetValueOrDefault(keywordResults[i].Id) + 1.0 / (k + i + 1);
+
+            var nameMap = vectorResults.Concat(keywordResults)
+                .GroupBy(r => r.Id)
+                .ToDictionary(g => g.Key, g => g.First().Name);
+
+            var results = scores
+                .Select(kv => new { Id = kv.Key, Name = nameMap[kv.Key], RrfScore = kv.Value })
+                .OrderByDescending(r => r.RrfScore)
+                .Take(5)
+                .ToList();
+
+            return Results.Ok(results);
+        })
+        .WithSummary("Performs hybrid search combining vector similarity and keyword matching using RRF");
     }
 }
