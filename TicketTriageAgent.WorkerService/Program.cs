@@ -1,10 +1,10 @@
-using TicketTriageAgent.WorkerService;
+using TicketTriageAgent.WorkerService.Agents;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddRabbitMQClient("rabbitmq");
-builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<TriageAgentOrchestrator>();
 
 var host = builder.Build();
 host.Run();
