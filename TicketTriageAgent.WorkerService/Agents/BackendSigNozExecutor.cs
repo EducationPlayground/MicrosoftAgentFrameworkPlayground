@@ -29,7 +29,8 @@ internal sealed partial class BackendSigNozExecutor : Executor
         CancellationToken cancellationToken = default)
     {
         using var httpClient = _httpClientFactory.CreateClient();
-
+        httpClient.DefaultRequestHeaders.Remove("SIGNOZ-API-KEY");
+        httpClient.DefaultRequestHeaders.Add("SIGNOZ-API-KEY", "Y8k8Vh9t4cDImAn/xUaV5g9ZM+XwvUCboqtopggznto=");
         var createdAt = DateTime.SpecifyKind(input.Ticket!.CreatedAt, DateTimeKind.Utc);
         var ticketOffset = new DateTimeOffset(createdAt);
         var start = ticketOffset.AddHours(-24).ToUnixTimeMilliseconds();

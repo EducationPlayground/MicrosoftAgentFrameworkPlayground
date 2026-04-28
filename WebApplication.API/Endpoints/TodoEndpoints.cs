@@ -64,7 +64,10 @@ public static class TodoEndpoints
 
         group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
-            throw new Exception("db hatası");
+            var a = 0;
+            var b = 10;
+
+            var c = b / a;
 
 
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
