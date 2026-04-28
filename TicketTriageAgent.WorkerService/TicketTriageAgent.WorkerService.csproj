@@ -9,9 +9,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.*" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Shared.MessageBus\Shared.MessageBus.csproj" />
     <ProjectReference Include="..\WebApplication.ServiceDefaults\WebApplication.ServiceDefaults.csproj" />
   </ItemGroup>
 </Project>

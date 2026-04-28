@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Shared.MessageBus;
 using WebApplication.API.Data;
 using WebApplication.API.Data.Entities;
+using WebApplication.API.Services;
 
 namespace WebApplication.API.Endpoints;
 
@@ -33,7 +35,7 @@ public static class TicketEndpoints
                 : Results.NotFound();
         });
 
-        group.MapPost("/", async (CreateTicketRequest request, ClaimsPrincipal user, AppDbContext db) =>
+        group.MapPost("/", async (CreateTicketRequest request, ClaimsPrincipal user, AppDbContext db, RabbitMqTicketPublisher publisher) =>
         {
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
@@ -50,6 +52,18 @@ public static class TicketEndpoints
             };
             db.Tickets.Add(ticket);
             await db.SaveChangesAsync();
+
+            await publisher.PublishTicketCreatedAsync(new TicketCreatedEvent
+            {
+                Id = ticket.Id,
+                Title = ticket.Title,
+                Description = ticket.Description,
+                Priority = ticket.Priority.ToString(),
+                Status = ticket.Status.ToString(),
+                CreatedAt = ticket.CreatedAt,
+                UserId = ticket.UserId
+            });
+
             return Results.Created($"/tickets/{ticket.Id}",
                 new TicketDto(ticket.Id, ticket.Title, ticket.Description, ticket.Priority, ticket.Status, ticket.CreatedAt, ticket.UpdatedAt));
         });

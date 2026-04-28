@@ -8,6 +8,7 @@ using Scalar.AspNetCore;
 using WebApplication.API.Data;
 using WebApplication.API.Data.Entities;
 using WebApplication.API.Endpoints;
+using WebApplication.API.Services;
 
 
 var builder = global::Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
@@ -47,6 +48,10 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+
+// RabbitMQ
+builder.Services.AddSingleton<RabbitMqTicketPublisher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RabbitMqTicketPublisher>());
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {

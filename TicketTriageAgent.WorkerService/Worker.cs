@@ -1,16 +1,64 @@
+using System.Text;
+using System.Text.Json;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using Shared.MessageBus;
+
 namespace TicketTriageAgent.WorkerService;
 
-public class Worker(ILogger<Worker> logger) : BackgroundService
+public class Worker(ILogger<Worker> logger, IConfiguration configuration) : BackgroundService
 {
+    private const string ExchangeName = "ticket.created";
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        var hostName = configuration["RabbitMQ:HostName"] ?? "localhost";
+        var factory = new ConnectionFactory { HostName = hostName };
+
+        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+
+        await channel.ExchangeDeclareAsync(ExchangeName, ExchangeType.Fanout, durable: true,
+            cancellationToken: stoppingToken);
+
+        var queueResult = await channel.QueueDeclareAsync(exclusive: true, autoDelete: true,
+            cancellationToken: stoppingToken);
+
+        await channel.QueueBindAsync(queueResult.QueueName, ExchangeName, routingKey: string.Empty,
+            cancellationToken: stoppingToken);
+
+        var consumer = new AsyncEventingBasicConsumer(channel);
+        consumer.ReceivedAsync += async (_, ea) =>
         {
-            if (logger.IsEnabled(LogLevel.Information))
+            var body = ea.Body.ToArray();
+            var json = Encoding.UTF8.GetString(body);
+            var ticketEvent = JsonSerializer.Deserialize<TicketCreatedEvent>(json);
+
+            if (ticketEvent is not null)
             {
-                logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                logger.LogInformation(
+                    "TicketCreatedEvent received — Id={Id}, Title={Title}, Priority={Priority}, Status={Status}, UserId={UserId}, CreatedAt={CreatedAt}",
+                    ticketEvent.Id, ticketEvent.Title, ticketEvent.Priority, ticketEvent.Status,
+                    ticketEvent.UserId, ticketEvent.CreatedAt);
+
+                // TODO: Add triage logic here
             }
-            await Task.Delay(1000, stoppingToken);
+
+            await channel.BasicAckAsync(ea.DeliveryTag, multiple: false);
+        };
+
+        await channel.BasicConsumeAsync(queueResult.QueueName, autoAck: false, consumer,
+            cancellationToken: stoppingToken);
+
+        logger.LogInformation("Worker started, listening on fanout exchange '{Exchange}'", ExchangeName);
+
+        try
+        {
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation("Worker stopping.");
         }
     }
 }
