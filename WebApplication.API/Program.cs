@@ -8,6 +8,7 @@ using Scalar.AspNetCore;
 using WebApplication.API.Data;
 using WebApplication.API.Data.Entities;
 using WebApplication.API.Endpoints;
+using WebApplication.API.Middleware;
 using WebApplication.API.Services;
 
 
@@ -71,6 +72,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<UserIdLoggingMiddleware>();
 
 app.MapAuthEndpoints();
 app.MapTodoEndpoints();
