@@ -27,12 +27,12 @@ internal sealed partial class GitHubIssueAgentExecutor : Executor
 
     protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
         protocolBuilder
-            .YieldsOutput<string>()
+            .SendsMessage<GitHubIssueResult>()
             .ConfigureRoutes(routes => routes
-                .AddHandler<BackendDiagnostics, string>(HandleAsync));
+                .AddHandler<BackendDiagnostics, GitHubIssueResult>(HandleAsync));
 
     [MessageHandler]
-    private async ValueTask<string> HandleAsync(
+    private async ValueTask<GitHubIssueResult> HandleAsync(
         BackendDiagnostics input,
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
@@ -63,9 +63,14 @@ internal sealed partial class GitHubIssueAgentExecutor : Executor
         var response = await _agent.RunAsync(prompt, cancellationToken: cancellationToken);
 
         _logger.LogInformation(
-            "[GitHubIssueAgentExecutor] Issue creation completed — TicketId={Id}, AgentResponse={Response}",
+            "[GitHubIssueAgentExecutor] Issue creation completed — TicketId={Id}, IssueUrl={Url}",
             input.Ticket.Id, response.Text);
 
-        return response.Text;
+        return new GitHubIssueResult
+        {
+            IssueUrl = response.Text,
+            Ticket = input.Ticket,
+            Triage = input.Triage
+        };
     }
 }

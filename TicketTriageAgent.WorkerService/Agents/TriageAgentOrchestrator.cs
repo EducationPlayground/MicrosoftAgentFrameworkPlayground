@@ -139,6 +139,7 @@ internal class TriageAgentOrchestrator(
         var backendExecutor = new BackendSigNozExecutor(httpClientFactory, logger);
         var otherTeamExecutor = new OtherTeamExecutor(logger);
         var gitHubIssueExecutor = await BuildGitHubIssueExecutorAsync(chatClient, cancellationToken);
+        var slackExecutor = BuildSlackNotificationExecutor(chatClient);
 
         return new WorkflowBuilder(triageExecutor)
             .AddEdge<TriageResultWithTicket>(triageExecutor, backendExecutor,
@@ -148,7 +149,8 @@ internal class TriageAgentOrchestrator(
                 condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
                              && !string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
             .AddEdge<BackendDiagnostics>(backendExecutor, gitHubIssueExecutor, condition: null)
-            .WithOutputFrom(gitHubIssueExecutor, otherTeamExecutor)
+            .AddEdge<GitHubIssueResult>(gitHubIssueExecutor, slackExecutor, condition: null)
+            .WithOutputFrom(slackExecutor, otherTeamExecutor)
             .Build();
     }
 
@@ -250,6 +252,36 @@ internal class TriageAgentOrchestrator(
         });
 
         return new GitHubIssueAgentExecutor(gitHubAgent, logger, owner, repo);
+    }
+
+    private SlackNotificationExecutor BuildSlackNotificationExecutor(ChatClient chatClient)
+    {
+        var sendSlackNotification = AIFunctionFactory.Create(
+            (string channel, string message) =>
+            {
+                logger.LogInformation("[SLACK → #{Channel}] {Message}", channel, message);
+                Console.WriteLine($"[SLACK → #{channel}] {message}");
+                return "Notification delivered to Slack channel successfully.";
+            },
+            name: "SendSlackNotification",
+            description: "Sends a notification message to the specified Slack channel.");
+
+        AIAgent slackAgent = chatClient.AsAIAgent(new ChatClientAgentOptions
+        {
+            Name = "SlackNotificationAgent",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = """
+                    You are a team notification assistant. When a GitHub issue is created for a
+                    triaged backend ticket, you send a concise alert to the relevant Slack channel.
+                    Always call SendSlackNotification exactly once with the channel name (without #)
+                    and a clear, brief message. After the tool call, confirm the notification was sent.
+                    """,
+                Tools = [sendSlackNotification]
+            }
+        });
+
+        return new SlackNotificationExecutor(slackAgent, logger);
     }
 
     private async Task SetupQueueAsync(IChannel channel, CancellationToken cancellationToken)
