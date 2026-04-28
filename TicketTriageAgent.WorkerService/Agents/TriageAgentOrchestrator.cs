@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Chat;
 using RabbitMQ.Client;
@@ -9,6 +10,13 @@ using RabbitMQ.Client.Events;
 using Shared.MessageBus;
 
 namespace TicketTriageAgent.WorkerService.Agents;
+
+public class TriageResult
+{
+    public string? Category { get; set; }
+    public string? Severity { get; set; }
+    public string? SuggestedTeam { get; set; }
+}
 
 internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, IConnection connection)
     : BackgroundService
@@ -46,14 +54,49 @@ internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, 
         var chatClient = new OpenAIClient(apiKey).GetChatClient("gpt-4o-mini");
 
         AIAgent triageAgent = chatClient.AsAIAgent(
-            """
-            You are a ticket triage specialist. Analyze the support ticket and determine:
-            1. Category (e.g., Bug, Feature Request, Performance, Security, Question)
-            2. Severity (Critical, High, Medium, Low)
-            3. Suggested team (e.g., Backend, Frontend, DevOps, QA, Product)
-            Be concise and structured in your response.
-            """,
-            "TriageAgent");
+            new ChatClientAgentOptions
+            {
+                Name = "TriageAgent",
+                ChatOptions = new ChatOptions
+                {
+                    Instructions = """
+                        You are an expert support ticket triage specialist responsible for classifying
+                        incoming tickets accurately and consistently.
+
+                        Analyze the provided ticket and determine the following:
+
+                        1. **Category** — The nature of the issue. Choose the single best fit from:
+                           - Bug: Unexpected behavior or software defect
+                           - Feature Request: New functionality requested by a user
+                           - Performance: Slowness, timeouts, or resource usage issues
+                           - Security: Potential vulnerabilities, unauthorized access, or data exposure
+                           - Question: General inquiry or clarification needed
+
+                        2. **Severity** — The business impact of the issue. Use these definitions:
+                           - Critical: System is down or data loss is occurring; immediate action required
+                           - High: Major functionality is broken; significant user impact
+                           - Medium: Non-critical functionality affected; workaround exists
+                           - Low: Minor issue or cosmetic problem; low user impact
+
+                        3. **SuggestedTeam** — The team best suited to handle this ticket:
+                           - Backend: Server-side logic, APIs, databases
+                           - Frontend: UI, client-side rendering, browser compatibility
+                           - DevOps: Infrastructure, deployments, CI/CD pipelines
+                           - QA: Test coverage, regression, quality assurance
+                           - Product: Requirements, roadmap, prioritization decisions
+                           - Security: Security incidents, penetration testing, compliance
+
+                        Guidelines:
+                        - Base your classification strictly on the ticket content provided.
+                        - If the ticket is ambiguous, lean toward the higher severity.
+                        - Do not infer information that is not present in the ticket.
+
+                        Respond ONLY with a valid JSON object that strictly matches the required schema.
+                        Do not include any explanation, markdown, or additional text outside the JSON.
+                        """,
+                    ResponseFormat = Microsoft.Extensions.AI.ChatResponseFormat.ForJsonSchema<TriageResult>()
+                }
+            });
 
         AIAgent responseAgent = chatClient.AsAIAgent(
             """
@@ -124,8 +167,8 @@ internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, 
             """;
 
         await using StreamingRun run =
-            await InProcessExecution.RunStreamingAsync(workflow, new Microsoft.Extensions.AI.ChatMessage(
-                Microsoft.Extensions.AI.ChatRole.User, prompt));
+            await InProcessExecution.RunStreamingAsync(workflow,
+                new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, prompt));
 
         await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
 
@@ -133,7 +176,17 @@ internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, 
         {
             if (evt is AgentResponseUpdateEvent update)
             {
-                logger.LogInformation("[{Agent}]: {Text}", update.ExecutorId, update.Data);
+                if (update.ExecutorId == "TriageAgent")
+                {
+                    var triageResult = JsonSerializer.Deserialize<TriageResult>(update.Data?.ToString() ?? "{}", JsonSerializerOptions.Web);
+                    logger.LogInformation(
+                        "[TriageAgent] Category={Category}, Severity={Severity}, SuggestedTeam={SuggestedTeam}",
+                        triageResult?.Category, triageResult?.Severity, triageResult?.SuggestedTeam);
+                }
+                else
+                {
+                    logger.LogInformation("[{Agent}]: {Text}", update.ExecutorId, update.Data);
+                }
             }
             else if (evt is WorkflowOutputEvent output)
             {
