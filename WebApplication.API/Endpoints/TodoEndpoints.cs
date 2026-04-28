@@ -11,8 +11,10 @@ public static class TodoEndpoints
     {
         var group = app.MapGroup("/todos").WithTags("Todos").RequireAuthorization();
 
-        group.MapGet("/", async (ClaimsPrincipal user, AppDbContext db) =>
+        group.MapGet("/", async (ClaimsPrincipal user, AppDbContext db, ILogger<Program> logger) =>
         {
+            logger.LogInformation("GetAlL endpoint is working");
+
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
             return await db.Todos

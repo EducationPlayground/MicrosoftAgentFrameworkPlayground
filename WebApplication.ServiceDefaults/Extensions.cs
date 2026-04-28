@@ -85,6 +85,8 @@ public static class Extensions
 
         if (useOtlpExporter)
         {
+            //builder.Services.AddOpenTelemetry().UseOtlpExporter();
+
             builder.Services.AddOpenTelemetry()
                 .UseOtlpExporter(OtlpExportProtocol.Grpc, new Uri("http://localhost:4317"));
         }

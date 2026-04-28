@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,6 +11,9 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         Exception exception,
         CancellationToken cancellationToken)
     {
+        var userId = httpContext.User.FindFirstValue("sub")
+                     ?? httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         var (statusCode, title) = exception switch
         {
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource not found"),
@@ -19,11 +23,25 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 
-        logger.LogError(
-            exception,
-            "Unhandled exception: {ExceptionType} — {Message}",
-            exception.GetType().Name,
-            exception.Message);
+        if (userId is not null)
+        {
+            using (logger.BeginScope(new Dictionary<string, object> { ["UserId"] = userId }))
+            {
+                logger.LogError(
+                    exception,
+                    "Unhandled exception: {ExceptionType} — {Message}",
+                    exception.GetType().Name,
+                    exception.Message);
+            }
+        }
+        else
+        {
+            logger.LogError(
+                exception,
+                "Unhandled exception: {ExceptionType} — {Message}",
+                exception.GetType().Name,
+                exception.Message);
+        }
 
         var problemDetails = new ProblemDetails
         {
