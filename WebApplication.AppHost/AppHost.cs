@@ -1,7 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 var rabbitmq = builder.AddRabbitMQ("rabbitmq")
-    .WithManagementPlugin();
+    .WithManagementPlugin().WithLifetime(ContainerLifetime.Persistent);
 
 var api = builder.AddProject<Projects.WebApplication_API>("webapplication-api")
     .WithReference(rabbitmq)
