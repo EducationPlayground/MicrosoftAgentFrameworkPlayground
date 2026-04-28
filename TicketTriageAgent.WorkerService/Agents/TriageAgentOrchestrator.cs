@@ -119,9 +119,11 @@ internal class TriageAgentOrchestrator(
 
         return new WorkflowBuilder(triageExecutor)
             .AddEdge<TriageResultWithTicket>(triageExecutor, backendExecutor,
-                condition: r => string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase))
+                condition: r => string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
             .AddEdge<TriageResultWithTicket>(triageExecutor, otherTeamExecutor,
-                condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase))
+                condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
+                             && !string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
             .WithOutputFrom(backendExecutor, otherTeamExecutor)
             .Build();
     }

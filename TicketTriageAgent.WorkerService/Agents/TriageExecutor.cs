@@ -13,7 +13,12 @@ internal sealed partial class TriageExecutor : Executor
         _triageAgent = triageAgent;
     }
 
-    protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) => protocolBuilder;
+
+    protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
+        protocolBuilder
+            .SendsMessage<TriageResultWithTicket>()
+            .ConfigureRoutes(routes => routes
+                .AddHandler<TicketWorkflowInput, TriageResultWithTicket>(HandleAsync));
 
     [MessageHandler]
     private async ValueTask<TriageResultWithTicket> HandleAsync(

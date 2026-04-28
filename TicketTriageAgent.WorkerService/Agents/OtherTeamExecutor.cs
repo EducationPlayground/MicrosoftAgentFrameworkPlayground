@@ -11,7 +11,12 @@ internal sealed partial class OtherTeamExecutor : Executor
         _logger = logger;
     }
 
-    protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) => protocolBuilder;
+    protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
+        protocolBuilder
+            .YieldsOutput<string>()
+            .ConfigureRoutes(routes => routes
+                .AddHandler<TriageResultWithTicket, string>(HandleAsync));
+
 
     [MessageHandler]
     private ValueTask<string> HandleAsync(
