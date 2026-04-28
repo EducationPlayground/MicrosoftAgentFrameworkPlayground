@@ -12,8 +12,8 @@ using WebApplication.API.Data;
 namespace WebApplication.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260428070409_y")]
-    partial class y
+    [Migration("20260428071929_initial")]
+    partial class initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -241,7 +241,13 @@ namespace WebApplication.API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Todos");
                 });
@@ -295,6 +301,17 @@ namespace WebApplication.API.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("WebApplication.API.Data.Entities.TodoItem", b =>
+                {
+                    b.HasOne("WebApplication.API.Data.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 #pragma warning restore 612, 618
         }
