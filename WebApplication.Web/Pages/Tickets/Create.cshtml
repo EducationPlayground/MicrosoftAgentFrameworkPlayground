@@ -1,0 +1,31 @@
+@page
+@model WebApplication.Web.Pages.Tickets.CreateModel
+@{
+    ViewData["Title"] = "Submit Ticket";
+}
+
+<h1>Submit a Ticket</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="mb-3">
+                <label asp-for="Title" class="form-label">Title</label>
+                <input asp-for="Title" class="form-control" placeholder="Brief summary of the issue" />
+                <span asp-validation-for="Title" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label">Description</label>
+                <textarea asp-for="Description" class="form-control" rows="4" placeholder="Describe the issue in detail"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Priority" class="form-label">Priority</label>
+                <select asp-for="Priority" asp-items="Model.PriorityOptions" class="form-select"></select>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit Ticket</button>
+            <a asp-page="Index" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>

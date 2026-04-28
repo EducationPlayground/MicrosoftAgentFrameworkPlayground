@@ -1,0 +1,35 @@
+@page "{id:int}"
+@model WebApplication.Web.Pages.Tickets.DetailModel
+@{
+    ViewData["Title"] = "Ticket Detail";
+}
+
+<h1>Ticket #@Model.Ticket!.Id</h1>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <h5 class="card-title">@Model.Ticket.Title</h5>
+        <p class="card-text">@Model.Ticket.Description</p>
+        <ul class="list-group list-group-flush mt-3">
+            <li class="list-group-item">
+                <strong>Priority:</strong>
+                <span class="badge @(Model.Ticket.Priority == "Critical" ? "bg-danger" : Model.Ticket.Priority == "High" ? "bg-warning text-dark" : Model.Ticket.Priority == "Medium" ? "bg-info text-dark" : "bg-secondary")">
+                    @Model.Ticket.Priority
+                </span>
+            </li>
+            <li class="list-group-item">
+                <strong>Status:</strong>
+                <span class="badge @(Model.Ticket.Status == "Open" ? "bg-primary" : Model.Ticket.Status == "InProgress" ? "bg-warning text-dark" : Model.Ticket.Status == "Resolved" ? "bg-success" : "bg-secondary")">
+                    @Model.Ticket.Status
+                </span>
+            </li>
+            <li class="list-group-item"><strong>Created:</strong> @Model.Ticket.CreatedAt.ToString("yyyy-MM-dd HH:mm")</li>
+            @if (Model.Ticket.UpdatedAt.HasValue)
+            {
+                <li class="list-group-item"><strong>Last Updated:</strong> @Model.Ticket.UpdatedAt.Value.ToString("yyyy-MM-dd HH:mm")</li>
+            }
+        </ul>
+    </div>
+</div>
+
+<a asp-page="Index" class="btn btn-secondary mt-3">Back to Tickets</a>

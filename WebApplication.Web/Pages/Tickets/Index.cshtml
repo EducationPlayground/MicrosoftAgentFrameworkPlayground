@@ -1,0 +1,56 @@
+@page
+@model WebApplication.Web.Pages.Tickets.IndexModel
+@{
+    ViewData["Title"] = "My Tickets";
+}
+
+<h1>My Tickets</h1>
+
+<p>
+    <a asp-page="Create" class="btn btn-primary">Submit New Ticket</a>
+</p>
+
+@if (!Model.Tickets.Any())
+{
+    <p class="text-muted">No tickets yet. Submit one!</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var ticket in Model.Tickets)
+            {
+                <tr>
+                    <td>@ticket.Title</td>
+                    <td>
+                        <span class="badge @(ticket.Priority == "Critical" ? "bg-danger" : ticket.Priority == "High" ? "bg-warning text-dark" : ticket.Priority == "Medium" ? "bg-info text-dark" : "bg-secondary")">
+                            @ticket.Priority
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge @(ticket.Status == "Open" ? "bg-primary" : ticket.Status == "InProgress" ? "bg-warning text-dark" : ticket.Status == "Resolved" ? "bg-success" : "bg-secondary")">
+                            @ticket.Status
+                        </span>
+                    </td>
+                    <td>@ticket.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>
+                        <a asp-page="Detail" asp-route-id="@ticket.Id" class="btn btn-sm btn-info">View</a>
+                        <form method="post" asp-page-handler="Delete" asp-route-id="@ticket.Id" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                    onclick="return confirm('Delete this ticket?')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -7,4 +7,5 @@ namespace WebApplication.API.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
     public DbSet<TodoItem> Todos => Set<TodoItem>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
 }
