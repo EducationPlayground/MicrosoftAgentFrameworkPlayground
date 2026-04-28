@@ -14,4 +14,8 @@
     <ProjectReference Include="..\WebApplication.Web\WebApplication.Web.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.2.4" />
+  </ItemGroup>
+
 </Project>

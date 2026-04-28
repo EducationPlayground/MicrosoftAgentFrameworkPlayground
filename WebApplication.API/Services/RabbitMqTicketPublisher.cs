@@ -10,25 +10,21 @@ public class RabbitMqTicketPublisher : IHostedService, IAsyncDisposable
     private const string ExchangeName = "ticket.created";
 
     private readonly ILogger<RabbitMqTicketPublisher> _logger;
-    private readonly string _hostName;
-    private IConnection? _connection;
+    private readonly IConnection _connection;
     private IChannel? _channel;
 
-    public RabbitMqTicketPublisher(ILogger<RabbitMqTicketPublisher> logger, IConfiguration configuration)
+    public RabbitMqTicketPublisher(ILogger<RabbitMqTicketPublisher> logger, IConnection connection)
     {
         _logger = logger;
-        _hostName = configuration["RabbitMQ:HostName"] ?? "localhost";
+        _connection = connection;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var factory = new ConnectionFactory { HostName = _hostName };
-        _connection = await factory.CreateConnectionAsync(cancellationToken);
         _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
         await _channel.ExchangeDeclareAsync(ExchangeName, ExchangeType.Fanout, durable: true,
             cancellationToken: cancellationToken);
-        _logger.LogInformation("RabbitMQ publisher connected to '{HostName}', exchange '{Exchange}'",
-            _hostName, ExchangeName);
+        _logger.LogInformation("RabbitMQ publisher connected, exchange '{Exchange}'", ExchangeName);
     }
 
     public async Task PublishTicketCreatedAsync(TicketCreatedEvent ticketEvent)
@@ -46,6 +42,5 @@ public class RabbitMqTicketPublisher : IHostedService, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (_channel is not null) await _channel.DisposeAsync();
-        if (_connection is not null) await _connection.DisposeAsync();
     }
 }

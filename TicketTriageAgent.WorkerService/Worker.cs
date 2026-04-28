@@ -6,16 +6,12 @@ using Shared.MessageBus;
 
 namespace TicketTriageAgent.WorkerService;
 
-public class Worker(ILogger<Worker> logger, IConfiguration configuration) : BackgroundService
+public class Worker(ILogger<Worker> logger, IConnection connection) : BackgroundService
 {
     private const string ExchangeName = "ticket.created";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var hostName = configuration["RabbitMQ:HostName"] ?? "localhost";
-        var factory = new ConnectionFactory { HostName = hostName };
-
-        await using var connection = await factory.CreateConnectionAsync(stoppingToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
         await channel.ExchangeDeclareAsync(ExchangeName, ExchangeType.Fanout, durable: true,

@@ -51,6 +51,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 
 // RabbitMQ
+builder.AddRabbitMQClient("rabbitmq");
 builder.Services.AddSingleton<RabbitMqTicketPublisher>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RabbitMqTicketPublisher>());
 
