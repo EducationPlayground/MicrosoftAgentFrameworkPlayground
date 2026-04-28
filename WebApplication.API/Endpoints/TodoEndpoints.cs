@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using WebApplication.API.Data;
 using WebApplication.API.Data.Entities;
@@ -8,32 +9,49 @@ public static class TodoEndpoints
 {
     public static IEndpointRouteBuilder MapTodoEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/todos").WithTags("Todos");
+        var group = app.MapGroup("/todos").WithTags("Todos").RequireAuthorization();
 
-        group.MapGet("/", async (AppDbContext db) =>
-            await db.Todos.ToListAsync());
-
-        group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
-            await db.Todos.FindAsync(id) is { } todo
-                ? Results.Ok(todo)
-                : Results.NotFound());
-
-        group.MapPost("/", async (CreateTodoRequest request, AppDbContext db) =>
+        group.MapGet("/", async (ClaimsPrincipal user, AppDbContext db) =>
         {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                         ?? user.FindFirstValue("sub");
+            return await db.Todos
+                .Where(t => t.UserId == userId)
+                .ToListAsync();
+        });
+
+        group.MapGet("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                         ?? user.FindFirstValue("sub");
+            return await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId) is { } todo
+                ? Results.Ok(todo)
+                : Results.NotFound();
+        });
+
+        group.MapPost("/", async (CreateTodoRequest request, ClaimsPrincipal user, AppDbContext db) =>
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                         ?? user.FindFirstValue("sub");
+            if (userId is null) return Results.Unauthorized();
+
             var todo = new TodoItem
             {
                 Title = request.Title,
                 IsCompleted = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UserId = userId
             };
             db.Todos.Add(todo);
             await db.SaveChangesAsync();
             return Results.Created($"/todos/{todo.Id}", todo);
         });
 
-        group.MapPut("/{id:int}", async (int id, UpdateTodoRequest request, AppDbContext db) =>
+        group.MapPut("/{id:int}", async (int id, UpdateTodoRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var todo = await db.Todos.FindAsync(id);
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                         ?? user.FindFirstValue("sub");
+            var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
             if (todo is null) return Results.NotFound();
 
             todo.Title = request.Title;
@@ -42,9 +60,11 @@ public static class TodoEndpoints
             return Results.Ok(todo);
         });
 
-        group.MapDelete("/{id:int}", async (int id, AppDbContext db) =>
+        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var todo = await db.Todos.FindAsync(id);
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                         ?? user.FindFirstValue("sub");
+            var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
             if (todo is null) return Results.NotFound();
 
             db.Todos.Remove(todo);

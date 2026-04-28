@@ -1,10 +1,24 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
+using WebApplication.Web;
+
 var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddRazorPages();
-builder.Services.AddHttpClient("TodoApi", c => c.BaseAddress = new Uri("http://webapplication-api"));
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+    });
+
+builder.Services.AddTransient<JwtCookieHandler>();
+builder.Services.AddHttpClient("TodoApi", c => c.BaseAddress = new Uri("http://webapplication-api"))
+    .AddHttpMessageHandler<JwtCookieHandler>();
 
 var app = builder.Build();
 
@@ -22,6 +36,7 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
