@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
+using ModelContextProtocol.Client;
 using OpenAI;
 using OpenAI.Chat;
 using RabbitMQ.Client;
@@ -30,6 +31,13 @@ public class TriageResultWithTicket
     public TicketCreatedEvent? Ticket { get; set; }
 }
 
+public class BackendDiagnostics
+{
+    public TicketCreatedEvent Ticket { get; set; } = null!;
+    public TriageResult? Triage { get; set; }
+    public string SigNozRawJson { get; set; } = string.Empty;
+}
+
 internal class TriageAgentOrchestrator(
     ILogger<TriageAgentOrchestrator> logger,
     IConnection connection,
@@ -37,10 +45,11 @@ internal class TriageAgentOrchestrator(
     : BackgroundService
 {
     private const string ExchangeName = "ticket.created";
+    private McpClient? _gitHubMcpClient;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var workflow = BuildWorkflow();
+        var workflow = await BuildWorkflowAsync(stoppingToken);
 
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
         await SetupQueueAsync(channel, stoppingToken);
@@ -61,7 +70,18 @@ internal class TriageAgentOrchestrator(
         }
     }
 
-    private Workflow BuildWorkflow()
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (_gitHubMcpClient is not null)
+        {
+            await _gitHubMcpClient.DisposeAsync();
+            _gitHubMcpClient = null;
+        }
+
+        await base.StopAsync(cancellationToken);
+    }
+
+    private async Task<Workflow> BuildWorkflowAsync(CancellationToken cancellationToken)
     {
         var apiKey = Environment.GetEnvironmentVariable("OPEN_AI_KEY")
             ?? throw new InvalidOperationException("OPEN_AI_KEY environment variable is not set.");
@@ -116,6 +136,7 @@ internal class TriageAgentOrchestrator(
         var triageExecutor = new TriageExecutor(triageAgent);
         var backendExecutor = new BackendSigNozExecutor(httpClientFactory, logger);
         var otherTeamExecutor = new OtherTeamExecutor(logger);
+        var gitHubIssueExecutor = await BuildGitHubIssueExecutorAsync(chatClient, cancellationToken);
 
         return new WorkflowBuilder(triageExecutor)
             .AddEdge<TriageResultWithTicket>(triageExecutor, backendExecutor,
@@ -124,8 +145,108 @@ internal class TriageAgentOrchestrator(
             .AddEdge<TriageResultWithTicket>(triageExecutor, otherTeamExecutor,
                 condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
                              && !string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
-            .WithOutputFrom(backendExecutor, otherTeamExecutor)
+            .AddEdge<BackendDiagnostics>(backendExecutor, gitHubIssueExecutor, condition: null)
+            .WithOutputFrom(gitHubIssueExecutor, otherTeamExecutor)
             .Build();
+    }
+
+    private async Task<GitHubIssueAgentExecutor> BuildGitHubIssueExecutorAsync(
+        ChatClient chatClient,
+        CancellationToken cancellationToken)
+    {
+        var owner = Environment.GetEnvironmentVariable("GITHUB_OWNER")
+            ?? throw new InvalidOperationException("GITHUB_OWNER environment variable is not set.");
+        var repo = Environment.GetEnvironmentVariable("GITHUB_REPO")
+            ?? throw new InvalidOperationException("GITHUB_REPO environment variable is not set.");
+        var token = Environment.GetEnvironmentVariable("GITHUB_PERSONAL_ACCESS_TOKEN")
+            ?? throw new InvalidOperationException("GITHUB_PERSONAL_ACCESS_TOKEN environment variable is not set.");
+
+        var transport = new StdioClientTransport(new StdioClientTransportOptions
+        {
+            Name = "github",
+            Command = OperatingSystem.IsWindows() ? "npx.cmd" : "npx",
+            Arguments = ["-y", "@modelcontextprotocol/server-github"],
+            EnvironmentVariables = new Dictionary<string, string?>
+            {
+                ["GITHUB_PERSONAL_ACCESS_TOKEN"] = token
+            }
+        });
+
+        _gitHubMcpClient = await McpClient.CreateAsync(transport, cancellationToken: cancellationToken);
+        var mcpTools = await _gitHubMcpClient.ListToolsAsync(cancellationToken: cancellationToken);
+
+        var toolNames = string.Join(", ", mcpTools.Select(t => t.Name).ToArray());
+        logger.LogInformation(
+            "[TriageAgentOrchestrator] GitHub MCP server connected — {ToolCount} tools available: {Tools}",
+            mcpTools.Count, toolNames);
+
+        var instructions = $$"""
+            You are a release-engineering assistant that turns a triaged backend support ticket and
+            its recent error logs into a high-quality GitHub issue.
+
+            Always create the issue in the repository '{{owner}}/{{repo}}' using the GitHub MCP
+            'create_issue' tool. Do not invent any other tool name — only call tools that were
+            registered with you.
+
+            From the SigNoz log JSON, extract for the most relevant error row:
+              - attributes_string.TraceId          -> Trace Id
+              - attributes_string.UserId           -> User Id
+              - attributes_string.exception.type   -> Error Type
+              - attributes_string.exception.message -> Error Message
+              - attributes_string.exception.stacktrace -> Stack Trace
+              - attributes_string.RequestPath      -> Request Path
+              - resources_string."service.name"    -> Service
+              - timestamp                          -> Timestamp
+            If a field cannot be found, write "(unknown)".
+
+            Issue title format: "[<Severity>] <Ticket Title> (Ticket #<Id>)"
+
+            Issue body MUST be Markdown using exactly this template:
+
+            ## Summary
+            <one short paragraph describing the failure and likely root cause>
+
+            ## Triage
+            - Category: <category>
+            - Severity: <severity>
+            - Suggested Team: <team>
+
+            ## Correlation
+            - Ticket Id: <id>
+            - User Id: <user id>
+            - Trace Id: <trace id>
+            - Service: <service>
+            - Request Path: <request path>
+            - Timestamp: <timestamp>
+
+            ## Error
+            **Type:** <error type>
+            **Message:** <error message>
+
+            ```
+            <stack trace>
+            ```
+
+            ## Suggested Next Steps
+            - <actionable step 1>
+            - <actionable step 2>
+
+            Labels: ["bug", "auto-triaged", "<suggested-team-lowercased>"]
+
+            After the tool call succeeds, respond with the created issue URL only.
+            """;
+
+        AIAgent gitHubAgent = chatClient.AsAIAgent(new ChatClientAgentOptions
+        {
+            Name = "GitHubIssueAgent",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = instructions,
+                Tools = [.. mcpTools]
+            }
+        });
+
+        return new GitHubIssueAgentExecutor(gitHubAgent, logger, owner, repo);
     }
 
     private async Task SetupQueueAsync(IChannel channel, CancellationToken cancellationToken)

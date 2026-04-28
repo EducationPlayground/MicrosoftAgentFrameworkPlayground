@@ -18,12 +18,12 @@ internal sealed partial class BackendSigNozExecutor : Executor
 
     protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
         protocolBuilder
-            .YieldsOutput<string>()
+            .SendsMessage<BackendDiagnostics>()
             .ConfigureRoutes(routes => routes
-                .AddHandler<TriageResultWithTicket, string>(HandleAsync));
+                .AddHandler<TriageResultWithTicket, BackendDiagnostics>(HandleAsync));
 
     [MessageHandler]
-    private async ValueTask<string> HandleAsync(
+    private async ValueTask<BackendDiagnostics> HandleAsync(
         TriageResultWithTicket input,
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
@@ -75,6 +75,13 @@ internal sealed partial class BackendSigNozExecutor : Executor
             "[BackendSigNozExecutor] SigNoz query sent — TicketId={Id}, UserId={UserId}, StatusCode={StatusCode}",
             input.Ticket.Id, input.Ticket.UserId, response.StatusCode);
 
-        return await response.Content.ReadAsStringAsync(cancellationToken);
+        var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        return new BackendDiagnostics
+        {
+            Ticket = input.Ticket,
+            Triage = input.Triage,
+            SigNozRawJson = rawJson
+        };
     }
 }
