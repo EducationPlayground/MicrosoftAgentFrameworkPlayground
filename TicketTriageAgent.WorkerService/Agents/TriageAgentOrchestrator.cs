@@ -18,7 +18,22 @@ public class TriageResult
     public string? SuggestedTeam { get; set; }
 }
 
-internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, IConnection connection)
+public class TicketWorkflowInput
+{
+    public TicketCreatedEvent Ticket { get; set; } = null!;
+    public string Prompt { get; set; } = string.Empty;
+}
+
+public class TriageResultWithTicket
+{
+    public TriageResult? Triage { get; set; }
+    public TicketCreatedEvent? Ticket { get; set; }
+}
+
+internal class TriageAgentOrchestrator(
+    ILogger<TriageAgentOrchestrator> logger,
+    IConnection connection,
+    IHttpClientFactory httpClientFactory)
     : BackgroundService
 {
     private const string ExchangeName = "ticket.created";
@@ -98,17 +113,17 @@ internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, 
                 }
             });
 
-        AIAgent responseAgent = chatClient.AsAIAgent(
-            """
-            You are a support team lead. Based on the triage analysis provided, create a brief action plan:
-            1. Immediate next steps (who should act and what they should do)
-            2. Estimated response time
-            3. Any escalation needed
-            Keep the plan short and actionable.
-            """,
-            "ResponseAgent");
+        var triageExecutor = new TriageExecutor(triageAgent);
+        var backendExecutor = new BackendSigNozExecutor(httpClientFactory, logger);
+        var otherTeamExecutor = new OtherTeamExecutor(logger);
 
-        return AgentWorkflowBuilder.BuildSequential([triageAgent, responseAgent]);
+        return new WorkflowBuilder(triageExecutor)
+            .AddEdge<TriageResultWithTicket>(triageExecutor, backendExecutor,
+                condition: r => string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase))
+            .AddEdge<TriageResultWithTicket>(triageExecutor, otherTeamExecutor,
+                condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase))
+            .WithOutputFrom(backendExecutor, otherTeamExecutor)
+            .Build();
     }
 
     private async Task SetupQueueAsync(IChannel channel, CancellationToken cancellationToken)
@@ -166,29 +181,15 @@ internal class TriageAgentOrchestrator(ILogger<TriageAgentOrchestrator> logger, 
             Created At: {ticketEvent.CreatedAt:O}
             """;
 
-        await using StreamingRun run =
-            await InProcessExecution.RunStreamingAsync(workflow,
-                new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, prompt));
+        var input = new TicketWorkflowInput { Ticket = ticketEvent, Prompt = prompt };
+
+        await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, input);
 
         await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
 
         await foreach (WorkflowEvent evt in run.WatchStreamAsync())
         {
-            if (evt is AgentResponseUpdateEvent update)
-            {
-                if (update.ExecutorId == "TriageAgent")
-                {
-                    var triageResult = JsonSerializer.Deserialize<TriageResult>(update.Data?.ToString() ?? "{}", JsonSerializerOptions.Web);
-                    logger.LogInformation(
-                        "[TriageAgent] Category={Category}, Severity={Severity}, SuggestedTeam={SuggestedTeam}",
-                        triageResult?.Category, triageResult?.Severity, triageResult?.SuggestedTeam);
-                }
-                else
-                {
-                    logger.LogInformation("[{Agent}]: {Text}", update.ExecutorId, update.Data);
-                }
-            }
-            else if (evt is WorkflowOutputEvent output)
+            if (evt is WorkflowOutputEvent output)
             {
                 logger.LogInformation("Workflow completed for ticket Id={Id}. Final output: {Output}",
                     ticketEvent.Id, output.Data);
