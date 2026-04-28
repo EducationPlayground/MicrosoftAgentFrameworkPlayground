@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\TicketTriageAgent.WorkerService\TicketTriageAgent.WorkerService.csproj" />
     <ProjectReference Include="..\WebApplication.API\WebApplication.API.csproj" />
     <ProjectReference Include="..\WebApplication.Web\WebApplication.Web.csproj" />
   </ItemGroup>
