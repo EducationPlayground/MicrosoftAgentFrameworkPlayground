@@ -54,6 +54,9 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<RabbitMqTicketPublisher>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RabbitMqTicketPublisher>());
 
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -62,6 +65,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
+
+app.UseExceptionHandler();
 
 app.MapScalarApiReference();
 // Configure the HTTP request pipeline
