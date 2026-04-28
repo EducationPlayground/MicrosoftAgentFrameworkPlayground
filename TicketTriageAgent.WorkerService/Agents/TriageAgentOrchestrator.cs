@@ -185,14 +185,21 @@ internal class TriageAgentOrchestrator(
 
         await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, input);
 
+        // WatchStreamAsync must begin iterating BEFORE TrySendMessageAsync is called,
+        // otherwise events emitted synchronously during processing will be missed.
+        var watchTask = ConsumeWorkflowEventsAsync(run, ticketEvent.Id);
         await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+        await watchTask;
+    }
 
+    private async Task ConsumeWorkflowEventsAsync(StreamingRun run, int ticketId)
+    {
         await foreach (WorkflowEvent evt in run.WatchStreamAsync())
         {
             if (evt is WorkflowOutputEvent output)
             {
                 logger.LogInformation("Workflow completed for ticket Id={Id}. Final output: {Output}",
-                    ticketEvent.Id, output.Data);
+                    ticketId, output.Data);
             }
         }
     }

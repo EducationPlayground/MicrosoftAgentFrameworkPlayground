@@ -8,4 +8,5 @@
   <Project Path="WebApplication.AppHost/WebApplication.AppHost.csproj" Id="a18c75c3-d485-4d78-886b-65e2ccd8255f" />
   <Project Path="WebApplication.ServiceDefaults/WebApplication.ServiceDefaults.csproj" />
   <Project Path="WebApplication.Web/WebApplication.Web.csproj" Id="b486eb25-ec0c-47a0-9d8d-49a6bca3746f" />
+  <Project Path="WorkflowConsole/WorkflowConsole.csproj" Id="e7a1985e-511f-4730-a6d4-e7b0a85de7ff" />
 </Solution>
