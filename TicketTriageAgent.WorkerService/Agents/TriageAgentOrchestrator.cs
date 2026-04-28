@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using OpenAI;
 using OpenAI.Chat;
@@ -41,7 +42,8 @@ public class BackendDiagnostics
 internal class TriageAgentOrchestrator(
     ILogger<TriageAgentOrchestrator> logger,
     IConnection connection,
-    IHttpClientFactory httpClientFactory)
+    IHttpClientFactory httpClientFactory,
+    IOptions<GitHubOptions> gitHubOptions)
     : BackgroundService
 {
     private const string ExchangeName = "ticket.created";
@@ -154,12 +156,13 @@ internal class TriageAgentOrchestrator(
         ChatClient chatClient,
         CancellationToken cancellationToken)
     {
-        var owner = Environment.GetEnvironmentVariable("GITHUB_OWNER")
-            ?? throw new InvalidOperationException("GITHUB_OWNER environment variable is not set.");
-        var repo = Environment.GetEnvironmentVariable("GITHUB_REPO")
-            ?? throw new InvalidOperationException("GITHUB_REPO environment variable is not set.");
-        var token = Environment.GetEnvironmentVariable("GITHUB_PERSONAL_ACCESS_TOKEN")
-            ?? throw new InvalidOperationException("GITHUB_PERSONAL_ACCESS_TOKEN environment variable is not set.");
+        var gh = gitHubOptions.Value;
+        var owner = !string.IsNullOrWhiteSpace(gh.Owner) ? gh.Owner
+            : throw new InvalidOperationException("GitHub:Owner is not configured.");
+        var repo = !string.IsNullOrWhiteSpace(gh.Repo) ? gh.Repo
+            : throw new InvalidOperationException("GitHub:Repo is not configured.");
+        var token = !string.IsNullOrWhiteSpace(gh.PersonalAccessToken) ? gh.PersonalAccessToken
+            : throw new InvalidOperationException("GitHub:PersonalAccessToken is not configured.");
 
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {
