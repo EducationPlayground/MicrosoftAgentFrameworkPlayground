@@ -42,5 +42,6 @@ if (app.Environment.IsDevelopment())
 // Map endpoints
 app.MapDocumentEndpoints();
 app.MapChatEndpoints();
+app.MapTodoEndpoints();
 
 app.Run();
