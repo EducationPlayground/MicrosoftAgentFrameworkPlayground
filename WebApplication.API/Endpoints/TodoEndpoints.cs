@@ -66,6 +66,8 @@ public static class TodoEndpoints
         {
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
+            if (userId is null) return Results.Unauthorized();
+
             var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
             if (todo is null) return Results.NotFound();
 
