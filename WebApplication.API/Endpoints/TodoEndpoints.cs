@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using WebApplication.API.Data;
@@ -64,6 +65,11 @@ public static class TodoEndpoints
 
         group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
+            var newTodo = new TodoItem { Title = null! };
+
+            // NullReferenceException: Title is null
+            var result = newTodo.Title.GetHashCode();
+
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
             var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);

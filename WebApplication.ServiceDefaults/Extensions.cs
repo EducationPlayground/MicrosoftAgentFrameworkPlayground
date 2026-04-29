@@ -58,11 +58,15 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    // Capture agent token usage metrics (gen_ai.client.token.usage)
+                    // emitted by Agent Framework via GenAI Semantic Conventions
+                    .AddMeter("Experimental.Microsoft.Agents.AI");
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    .AddSource("Experimental.Microsoft.Agents.AI")
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>
