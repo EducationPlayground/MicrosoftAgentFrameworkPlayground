@@ -64,12 +64,6 @@ public static class TodoEndpoints
 
         group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var a = 0;
-            var b = 10;
-
-            var c = b / a;
-
-
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
             var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
