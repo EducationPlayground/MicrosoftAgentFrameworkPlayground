@@ -2,6 +2,7 @@ using Microsoft.Agents.AI.Workflows;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
+// NON-BACKEND BRANCH — terminal step: logs the routing decision for non-Backend/non-Frontend teams.
 internal sealed partial class OtherTeamExecutor : Executor
 {
     private readonly ILogger _logger;

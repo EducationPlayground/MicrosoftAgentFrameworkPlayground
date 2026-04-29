@@ -4,6 +4,7 @@ using Microsoft.Agents.AI.Workflows;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
+// STAGE 1 — Classifies the incoming ticket (Category / Severity / SuggestedTeam) using an LLM.
 internal sealed partial class TriageExecutor : Executor
 {
     private readonly AIAgent _triageAgent;

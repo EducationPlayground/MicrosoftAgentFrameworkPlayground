@@ -4,6 +4,7 @@ using ModelContextProtocol.Client;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
+// BACKEND BRANCH — STEP 3: assigns GitHub Copilot to the freshly created issue via the GitHub MCP server.
 internal sealed partial class CopilotAssignAgentExecutor : Executor
 {
     private readonly McpClient _mcpClient;

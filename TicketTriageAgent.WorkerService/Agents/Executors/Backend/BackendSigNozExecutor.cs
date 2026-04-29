@@ -3,6 +3,7 @@ using Microsoft.Agents.AI.Workflows;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
+// BACKEND BRANCH — STEP 1: pulls the most recent error logs for the ticket's user from SigNoz.
 internal sealed partial class BackendSigNozExecutor : Executor
 {
     private readonly IHttpClientFactory _httpClientFactory;

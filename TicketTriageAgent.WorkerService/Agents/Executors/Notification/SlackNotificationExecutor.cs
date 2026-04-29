@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
+// BACKEND BRANCH — terminal step: notifies the responsible Slack channel after the issue + Copilot assignment.
 internal sealed partial class SlackNotificationExecutor : Executor
 {
     private readonly AIAgent _agent;

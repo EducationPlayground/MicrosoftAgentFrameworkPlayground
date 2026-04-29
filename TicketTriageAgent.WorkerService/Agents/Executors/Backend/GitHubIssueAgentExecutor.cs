@@ -4,6 +4,7 @@ using Microsoft.Agents.AI.Workflows;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
+// BACKEND BRANCH — STEP 2: asks an LLM (with GitHub MCP tools) to open a structured GitHub issue.
 internal sealed partial class GitHubIssueAgentExecutor : Executor
 {
     private readonly AIAgent _agent;

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
@@ -13,32 +13,16 @@ using Shared.MessageBus;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
-public class TriageResult
-{
-    public string? Category { get; set; }
-    public string? Severity { get; set; }
-    public string? SuggestedTeam { get; set; }
-}
-
-public class TicketWorkflowInput
-{
-    public TicketCreatedEvent Ticket { get; set; } = null!;
-    public string Prompt { get; set; } = string.Empty;
-}
-
-public class TriageResultWithTicket
-{
-    public TriageResult? Triage { get; set; }
-    public TicketCreatedEvent? Ticket { get; set; }
-}
-
-public class BackendDiagnostics
-{
-    public TicketCreatedEvent Ticket { get; set; } = null!;
-    public TriageResult? Triage { get; set; }
-    public string SigNozRawJson { get; set; } = string.Empty;
-}
-
+// The conductor: subscribes to ticket.created events and runs them through the multi-agent workflow.
+//
+// Workflow shape:
+//
+//   TriageExecutor
+//        ├── (SuggestedTeam == Backend/Frontend) ──► BackendSigNozExecutor
+//        │                                              └► GitHubIssueAgentExecutor
+//        │                                                    └► CopilotAssignAgentExecutor
+//        │                                                          └► SlackNotificationExecutor (output)
+//        └── (other teams) ─────────────────────► OtherTeamExecutor (output)
 internal class TriageAgentOrchestrator(
     ILogger<TriageAgentOrchestrator> logger,
     IConnection connection,
