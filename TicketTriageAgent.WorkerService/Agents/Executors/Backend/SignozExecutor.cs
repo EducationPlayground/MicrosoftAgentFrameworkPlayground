@@ -4,14 +4,14 @@ using Microsoft.Agents.AI.Workflows;
 namespace TicketTriageAgent.WorkerService.Agents;
 
 // BACKEND BRANCH — STEP 1: pulls the most recent error logs for the ticket's user from SigNoz.
-internal sealed partial class BackendSigNozExecutor : Executor
+internal sealed partial class SignozExecutor : Executor
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
     private const string SigNozUrl = "http://localhost:8080/api/v5/query_range";
 
-    public BackendSigNozExecutor(IHttpClientFactory httpClientFactory, ILogger logger)
-        : base("BackendSigNozExecutor")
+    public SignozExecutor(IHttpClientFactory httpClientFactory, ILogger logger)
+        : base("SignozExecutor")
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -74,7 +74,7 @@ internal sealed partial class BackendSigNozExecutor : Executor
         var response = await httpClient.PostAsJsonAsync(SigNozUrl, requestBody, cancellationToken);
 
         _logger.LogInformation(
-            "[BackendSigNozExecutor] SigNoz query sent — TicketId={Id}, UserId={UserId}, StatusCode={StatusCode}",
+            "[SignozExecutor] SigNoz query sent — TicketId={Id}, UserId={UserId}, StatusCode={StatusCode}",
             input.Ticket.Id, input.Ticket.UserId, response.StatusCode);
 
         var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);

@@ -21,4 +21,8 @@
     <ProjectReference Include="..\Shared.MessageBus\Shared.MessageBus.csproj" />
     <ProjectReference Include="..\WebApplication.ServiceDefaults\WebApplication.ServiceDefaults.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Agents\Orchestration\" />
+  </ItemGroup>
 </Project>

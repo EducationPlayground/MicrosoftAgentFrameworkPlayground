@@ -18,13 +18,13 @@ namespace TicketTriageAgent.WorkerService.Agents;
 // Workflow shape:
 //
 //   TriageExecutor
-//        ├── (SuggestedTeam == Backend/Frontend) ──► BackendSigNozExecutor
+//        ├── (SuggestedTeam == Backend/Frontend) ──► SignozExecutor
 //        │                                              └► GitHubIssueAgentExecutor
 //        │                                                    └► CopilotAssignAgentExecutor
 //        │                                                          └► SlackNotificationExecutor (output)
 //        └── (other teams) ─────────────────────► OtherTeamExecutor (output)
-internal class TriageAgentOrchestrator(
-    ILogger<TriageAgentOrchestrator> logger,
+internal class TicketCreatedConsumer(
+    ILogger<TicketCreatedConsumer> logger,
     IConnection connection,
     IHttpClientFactory httpClientFactory,
     IOptions<GitHubOptions> gitHubOptions)
@@ -44,7 +44,7 @@ internal class TriageAgentOrchestrator(
         await StartConsumingAsync(channel, queueName, workflow, stoppingToken);
 
         logger.LogInformation(
-            "TriageAgentOrchestrator started, listening on fanout exchange '{Exchange}'", ExchangeName);
+            "TicketCreatedConsumer started, listening on fanout exchange '{Exchange}'", ExchangeName);
 
         try
         {
@@ -52,19 +52,8 @@ internal class TriageAgentOrchestrator(
         }
         catch (OperationCanceledException)
         {
-            logger.LogInformation("TriageAgentOrchestrator stopping.");
+            logger.LogInformation("TicketCreatedConsumer stopping.");
         }
-    }
-
-    public override async Task StopAsync(CancellationToken cancellationToken)
-    {
-        if (_gitHubMcpClient is not null)
-        {
-            await _gitHubMcpClient.DisposeAsync();
-            _gitHubMcpClient = null;
-        }
-
-        await base.StopAsync(cancellationToken);
     }
 
     private async Task<Workflow> BuildWorkflowAsync(CancellationToken cancellationToken)
@@ -120,25 +109,40 @@ internal class TriageAgentOrchestrator(
             });
 
         var triageExecutor = new TriageExecutor(triageAgent);
-        var backendExecutor = new BackendSigNozExecutor(httpClientFactory, logger);
+        var signozExecutor = new SignozExecutor(httpClientFactory, logger);
         var otherTeamExecutor = new OtherTeamExecutor(logger);
         var gitHubIssueExecutor = await BuildGitHubIssueExecutorAsync(chatClient, cancellationToken);
         var copilotAssignExecutor = BuildCopilotAssignExecutor();
         var slackExecutor = BuildSlackNotificationExecutor(chatClient);
 
         return new WorkflowBuilder(triageExecutor)
-            .AddEdge<TriageResultWithTicket>(triageExecutor, backendExecutor,
+            .AddEdge<TriageResultWithTicket>(triageExecutor, signozExecutor,
                 condition: r => string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
+                                || string.Equals(r?.Triage?.SuggestedTeam, "Frontend",
+                                    StringComparison.OrdinalIgnoreCase))
             .AddEdge<TriageResultWithTicket>(triageExecutor, otherTeamExecutor,
                 condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
-                             && !string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
-            .AddEdge<BackendDiagnostics>(backendExecutor, gitHubIssueExecutor, condition: null)
+                                && !string.Equals(r?.Triage?.SuggestedTeam, "Frontend",
+                                    StringComparison.OrdinalIgnoreCase))
+            .AddEdge<BackendDiagnostics>(signozExecutor, gitHubIssueExecutor, condition: null)
             .AddEdge<GitHubIssueResult>(gitHubIssueExecutor, copilotAssignExecutor, condition: null)
             .AddEdge<CopilotAssignmentResult>(copilotAssignExecutor, slackExecutor, condition: null)
             .WithOutputFrom(slackExecutor, otherTeamExecutor)
             .Build();
     }
+
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (_gitHubMcpClient is not null)
+        {
+            await _gitHubMcpClient.DisposeAsync();
+            _gitHubMcpClient = null;
+        }
+
+        await base.StopAsync(cancellationToken);
+    }
+
 
     private CopilotAssignAgentExecutor BuildCopilotAssignExecutor()
     {
@@ -167,21 +171,13 @@ internal class TriageAgentOrchestrator(
         var token = !string.IsNullOrWhiteSpace(gh.PersonalAccessToken) ? gh.PersonalAccessToken
             : throw new InvalidOperationException("GitHub:PersonalAccessToken is not configured.");
 
-        var transport = new StdioClientTransport(new StdioClientTransportOptions
+        var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Name = "github",
-            Command = "docker",
-            Arguments =
-            [
-                "run", "-i", "--rm",
-                "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
-                "-e", "GITHUB_TOOLSETS",
-                "ghcr.io/github/github-mcp-server"
-            ],
-            EnvironmentVariables = new Dictionary<string, string?>
+            Endpoint = new Uri("https://api.githubcopilot.com/mcp/"),
+            AdditionalHeaders = new Dictionary<string, string>
             {
-                ["GITHUB_PERSONAL_ACCESS_TOKEN"] = token,
-                ["GITHUB_TOOLSETS"] = "default,copilot"
+                ["Authorization"] = $"Bearer {token}"
             }
         });
 
@@ -190,7 +186,7 @@ internal class TriageAgentOrchestrator(
 
         var toolNames = string.Join(", ", mcpTools.Select(t => t.Name).ToArray());
         logger.LogInformation(
-            "[TriageAgentOrchestrator] GitHub MCP server connected — {ToolCount} tools available: {Tools}",
+            "[TicketCreatedConsumer] GitHub MCP server connected — {ToolCount} tools available: {Tools}",
             mcpTools.Count, toolNames);
 
         var instructions = $$"""
