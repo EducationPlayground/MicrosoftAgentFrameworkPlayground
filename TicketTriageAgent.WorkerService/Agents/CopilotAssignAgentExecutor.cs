@@ -60,9 +60,9 @@ internal sealed partial class CopilotAssignAgentExecutor : Executor
 
         var arguments = new Dictionary<string, object?>
         {
-            ["owner"]        = _owner,
-            ["repo"]         = _repo,
-            ["issueNumber"]  = issueNumber.Value
+            ["owner"]         = _owner,
+            ["repo"]          = _repo,
+            ["issue_number"]  = issueNumber.Value
         };
 
         var result = await _mcpClient.CallToolAsync("assign_copilot_to_issue", arguments, cancellationToken: cancellationToken);

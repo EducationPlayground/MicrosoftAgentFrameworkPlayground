@@ -191,11 +191,13 @@ internal class TriageAgentOrchestrator(
             [
                 "run", "-i", "--rm",
                 "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                "-e", "GITHUB_TOOLSETS",
                 "ghcr.io/github/github-mcp-server"
             ],
             EnvironmentVariables = new Dictionary<string, string?>
             {
-                ["GITHUB_PERSONAL_ACCESS_TOKEN"] = token
+                ["GITHUB_PERSONAL_ACCESS_TOKEN"] = token,
+                ["GITHUB_TOOLSETS"] = "default,copilot"
             }
         });
 
