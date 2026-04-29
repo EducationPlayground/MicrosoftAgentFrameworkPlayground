@@ -107,6 +107,7 @@ internal class TicketCreatedConsumer(
                     ResponseFormat = Microsoft.Extensions.AI.ChatResponseFormat.ForJsonSchema<TriageResult>()
                 }
             });
+        triageAgent = new OpenTelemetryAgent(triageAgent, "Experimental.Microsoft.Agents.AI");
 
         var triageExecutor = new TriageExecutor(triageAgent);
         var signozExecutor = new SignozExecutor(httpClientFactory);
@@ -254,6 +255,7 @@ internal class TicketCreatedConsumer(
                 Tools = [.. mcpTools]
             }
         });
+        gitHubAgent = new OpenTelemetryAgent(gitHubAgent, "Experimental.Microsoft.Agents.AI");
 
         return new GitHubIssueAgentExecutor(gitHubAgent, owner, repo);
     }
@@ -285,7 +287,7 @@ internal class TicketCreatedConsumer(
             }
         });
 
-        return new SlackNotificationExecutor(slackAgent);
+        return new SlackNotificationExecutor(new OpenTelemetryAgent(slackAgent, "Experimental.Microsoft.Agents.AI"));
     }
 
     private async Task SetupQueueAsync(IChannel channel, CancellationToken cancellationToken)
