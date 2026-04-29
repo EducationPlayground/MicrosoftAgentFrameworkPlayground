@@ -139,6 +139,7 @@ internal class TriageAgentOrchestrator(
         var backendExecutor = new BackendSigNozExecutor(httpClientFactory, logger);
         var otherTeamExecutor = new OtherTeamExecutor(logger);
         var gitHubIssueExecutor = await BuildGitHubIssueExecutorAsync(chatClient, cancellationToken);
+        var copilotAssignExecutor = BuildCopilotAssignExecutor();
         var slackExecutor = BuildSlackNotificationExecutor(chatClient);
 
         return new WorkflowBuilder(triageExecutor)
@@ -149,9 +150,25 @@ internal class TriageAgentOrchestrator(
                 condition: r => !string.Equals(r?.Triage?.SuggestedTeam, "Backend", StringComparison.OrdinalIgnoreCase)
                              && !string.Equals(r?.Triage?.SuggestedTeam, "Frontend", StringComparison.OrdinalIgnoreCase))
             .AddEdge<BackendDiagnostics>(backendExecutor, gitHubIssueExecutor, condition: null)
-            .AddEdge<GitHubIssueResult>(gitHubIssueExecutor, slackExecutor, condition: null)
+            .AddEdge<GitHubIssueResult>(gitHubIssueExecutor, copilotAssignExecutor, condition: null)
+            .AddEdge<CopilotAssignmentResult>(copilotAssignExecutor, slackExecutor, condition: null)
             .WithOutputFrom(slackExecutor, otherTeamExecutor)
             .Build();
+    }
+
+    private CopilotAssignAgentExecutor BuildCopilotAssignExecutor()
+    {
+        if (_gitHubMcpClient is null)
+        {
+            throw new InvalidOperationException(
+                "GitHub MCP client must be initialized before building the Copilot assign executor.");
+        }
+
+        var gh = gitHubOptions.Value;
+        var owner = gh.Owner;
+        var repo = gh.Repo;
+
+        return new CopilotAssignAgentExecutor(_gitHubMcpClient, logger, owner, repo);
     }
 
     private async Task<GitHubIssueAgentExecutor> BuildGitHubIssueExecutorAsync(
@@ -169,8 +186,13 @@ internal class TriageAgentOrchestrator(
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {
             Name = "github",
-            Command = OperatingSystem.IsWindows() ? "npx.cmd" : "npx",
-            Arguments = ["-y", "@modelcontextprotocol/server-github"],
+            Command = "docker",
+            Arguments =
+            [
+                "run", "-i", "--rm",
+                "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                "ghcr.io/github/github-mcp-server"
+            ],
             EnvironmentVariables = new Dictionary<string, string?>
             {
                 ["GITHUB_PERSONAL_ACCESS_TOKEN"] = token

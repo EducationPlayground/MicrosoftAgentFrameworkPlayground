@@ -20,29 +20,36 @@ internal sealed partial class SlackNotificationExecutor : Executor
         protocolBuilder
             .YieldsOutput<string>()
             .ConfigureRoutes(routes => routes
-                .AddHandler<GitHubIssueResult, string>(HandleAsync));
+                .AddHandler<CopilotAssignmentResult, string>(HandleAsync));
 
     [MessageHandler]
     private async ValueTask<string> HandleAsync(
-        GitHubIssueResult input,
+        CopilotAssignmentResult input,
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "[SlackNotificationExecutor] Sending Slack notification — TicketId={Id}, IssueUrl={Url}",
-            input.Ticket.Id, input.IssueUrl);
+            "[SlackNotificationExecutor] Sending Slack notification — TicketId={Id}, IssueUrl={Url}, CopilotAssigned={Assigned}",
+            input.Ticket.Id, input.IssueUrl, input.CopilotAssigned);
+
+        var copilotLine = input.CopilotAssigned
+            ? $"Copilot assigned to issue #{input.IssueNumber} — a draft fix PR is on its way."
+            : $"Copilot could NOT be assigned automatically ({input.AssignmentMessage}). Manual triage required.";
 
         var prompt = $"""
-            A new GitHub issue was created for a triaged backend ticket.
+            A new GitHub issue was created for a triaged backend ticket and the GitHub Copilot
+            coding agent has been delegated to propose a fix.
 
-            Ticket Title : {input.Ticket.Title}
-            Severity     : {input.Triage?.Severity}
+            Ticket Title  : {input.Ticket.Title}
+            Severity      : {input.Triage?.Severity}
             Suggested Team: {input.Triage?.SuggestedTeam}
             GitHub Issue  : {input.IssueUrl}
+            Copilot Status: {copilotLine}
 
             Call SendSlackNotification once to post a concise alert to the channel
             '#{input.Triage?.SuggestedTeam?.ToLowerInvariant()}-alerts'.
-            The message must include the ticket title, severity level, and the GitHub issue URL.
+            The message must include the ticket title, severity level, the GitHub issue URL,
+            and a one-line note about the Copilot assignment status above.
             After the tool call, confirm that the notification was sent.
             """;
 
