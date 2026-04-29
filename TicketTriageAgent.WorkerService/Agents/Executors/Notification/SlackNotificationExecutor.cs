@@ -1,6 +1,5 @@
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
-using Microsoft.Extensions.AI;
 
 namespace TicketTriageAgent.WorkerService.Agents;
 
@@ -8,13 +7,11 @@ namespace TicketTriageAgent.WorkerService.Agents;
 internal sealed partial class SlackNotificationExecutor : Executor
 {
     private readonly AIAgent _agent;
-    private readonly ILogger _logger;
 
-    public SlackNotificationExecutor(AIAgent agent, ILogger logger)
+    public SlackNotificationExecutor(AIAgent agent)
         : base("SlackNotification")
     {
         _agent = agent;
-        _logger = logger;
     }
 
     protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
@@ -29,10 +26,6 @@ internal sealed partial class SlackNotificationExecutor : Executor
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(
-            "[SlackNotificationExecutor] Sending Slack notification — TicketId={Id}, IssueUrl={Url}, CopilotAssigned={Assigned}",
-            input.Ticket.Id, input.IssueUrl, input.CopilotAssigned);
-
         var copilotLine = input.CopilotAssigned
             ? $"Copilot assigned to issue #{input.IssueNumber} — a draft fix PR is on its way."
             : $"Copilot could NOT be assigned automatically ({input.AssignmentMessage}). Manual triage required.";
@@ -56,9 +49,7 @@ internal sealed partial class SlackNotificationExecutor : Executor
 
         var response = await _agent.RunAsync(prompt, cancellationToken: cancellationToken);
 
-        _logger.LogInformation(
-            "[SlackNotificationExecutor] Notification dispatched — TicketId={Id}, Result={Result}",
-            input.Ticket.Id, response.Text);
+        Console.WriteLine($"[Step 5] Slack     → Notification sent to #{input.Triage?.SuggestedTeam?.ToLowerInvariant()}-alerts for TicketId={input.Ticket.Id}");
 
         return response.Text;
     }

@@ -55,10 +55,6 @@ internal sealed partial class CopilotAssignAgentExecutor : Executor
             };
         }
 
-        _logger.LogInformation(
-            "[CopilotAssignAgentExecutor] Assigning Copilot to issue #{IssueNumber} in {Owner}/{Repo}",
-            issueNumber, _owner, _repo);
-
         var arguments = new Dictionary<string, object?>
         {
             ["owner"]         = _owner,
@@ -70,10 +66,7 @@ internal sealed partial class CopilotAssignAgentExecutor : Executor
 
         var isError = result.IsError == true;
 
-        var contentText = string.Join(" | ", result.Content.Select(c => c.ToString()));
-        _logger.LogInformation(
-            "[CopilotAssignAgentExecutor] Copilot assignment completed — IssueNumber={IssueNumber}, IsError={IsError}, Content={Content}",
-            issueNumber, isError, contentText);
+        Console.WriteLine($"[Step 4] Copilot   → {(isError ? $"Assignment FAILED for issue #{issueNumber}" : $"Assigned to issue #{issueNumber}")} in {_owner}/{_repo}");
 
         return new CopilotAssignmentResult
         {

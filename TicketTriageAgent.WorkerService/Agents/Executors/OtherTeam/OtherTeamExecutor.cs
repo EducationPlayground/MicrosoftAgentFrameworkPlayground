@@ -5,11 +5,8 @@ namespace TicketTriageAgent.WorkerService.Agents;
 // NON-BACKEND BRANCH — terminal step: logs the routing decision for non-Backend/non-Frontend teams.
 internal sealed partial class OtherTeamExecutor : Executor
 {
-    private readonly ILogger _logger;
-
-    public OtherTeamExecutor(ILogger logger) : base("OtherTeamExecutor")
+    public OtherTeamExecutor() : base("OtherTeamExecutor")
     {
-        _logger = logger;
     }
 
     protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
@@ -25,21 +22,8 @@ internal sealed partial class OtherTeamExecutor : Executor
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
-        var output = $"""
-            [OtherTeamExecutor] Ticket routed to non-Backend team
-            Ticket Id     : {input.Ticket?.Id}
-            Title         : {input.Ticket?.Title}
-            Category      : {input.Triage?.Category}
-            Severity      : {input.Triage?.Severity}
-            Suggested Team: {input.Triage?.SuggestedTeam}
-            """;
+        Console.WriteLine($"[Step 2] OtherTeam → Ticket #{input.Ticket?.Id} routed to {input.Triage?.SuggestedTeam} team (Category: {input.Triage?.Category}, Severity: {input.Triage?.Severity})");
 
-        Console.WriteLine(output);
-
-        _logger.LogInformation(
-            "[OtherTeamExecutor] TicketId={Id}, Team={Team}, Category={Category}, Severity={Severity}",
-            input.Ticket?.Id, input.Triage?.SuggestedTeam, input.Triage?.Category, input.Triage?.Severity);
-
-        return ValueTask.FromResult(output);
+        return ValueTask.FromResult($"Ticket #{input.Ticket?.Id} routed to {input.Triage?.SuggestedTeam} team.");
     }
 }

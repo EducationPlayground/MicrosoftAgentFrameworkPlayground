@@ -109,8 +109,8 @@ internal class TicketCreatedConsumer(
             });
 
         var triageExecutor = new TriageExecutor(triageAgent);
-        var signozExecutor = new SignozExecutor(httpClientFactory, logger);
-        var otherTeamExecutor = new OtherTeamExecutor(logger);
+        var signozExecutor = new SignozExecutor(httpClientFactory);
+        var otherTeamExecutor = new OtherTeamExecutor();
         var gitHubIssueExecutor = await BuildGitHubIssueExecutorAsync(chatClient, cancellationToken);
         var copilotAssignExecutor = BuildCopilotAssignExecutor();
         var slackExecutor = BuildSlackNotificationExecutor(chatClient);
@@ -255,7 +255,7 @@ internal class TicketCreatedConsumer(
             }
         });
 
-        return new GitHubIssueAgentExecutor(gitHubAgent, logger, owner, repo);
+        return new GitHubIssueAgentExecutor(gitHubAgent, owner, repo);
     }
 
     private SlackNotificationExecutor BuildSlackNotificationExecutor(ChatClient chatClient)
@@ -285,7 +285,7 @@ internal class TicketCreatedConsumer(
             }
         });
 
-        return new SlackNotificationExecutor(slackAgent, logger);
+        return new SlackNotificationExecutor(slackAgent);
     }
 
     private async Task SetupQueueAsync(IChannel channel, CancellationToken cancellationToken)
@@ -329,9 +329,7 @@ internal class TicketCreatedConsumer(
 
     private async Task RunTriageWorkflowAsync(Workflow workflow, TicketCreatedEvent ticketEvent)
     {
-        logger.LogInformation(
-            "TriageOrchestrator received ticket — Id={Id}, Title={Title}, Priority={Priority}",
-            ticketEvent.Id, ticketEvent.Title, ticketEvent.Priority);
+        Console.WriteLine($"\n[Ticket #{ticketEvent.Id}] \"{ticketEvent.Title}\" (Priority: {ticketEvent.Priority}) — Workflow started");
 
         var prompt = $"""
             Ticket ID: {ticketEvent.Id}
@@ -358,10 +356,9 @@ internal class TicketCreatedConsumer(
     {
         await foreach (WorkflowEvent evt in run.WatchStreamAsync())
         {
-            if (evt is WorkflowOutputEvent output)
+            if (evt is WorkflowOutputEvent)
             {
-                logger.LogInformation("Workflow completed for ticket Id={Id}. Final output: {Output}",
-                    ticketId, output.Data);
+                Console.WriteLine($"[Ticket #{ticketId}] Workflow complete");
             }
         }
     }

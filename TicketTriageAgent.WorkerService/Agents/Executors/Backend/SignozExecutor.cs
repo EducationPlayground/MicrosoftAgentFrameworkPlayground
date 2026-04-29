@@ -7,14 +7,12 @@ namespace TicketTriageAgent.WorkerService.Agents;
 internal sealed partial class SignozExecutor : Executor
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger _logger;
     private const string SigNozUrl = "http://localhost:8080/api/v5/query_range";
 
-    public SignozExecutor(IHttpClientFactory httpClientFactory, ILogger logger)
+    public SignozExecutor(IHttpClientFactory httpClientFactory)
         : base("SignozExecutor")
     {
         _httpClientFactory = httpClientFactory;
-        _logger = logger;
     }
 
     protected override ProtocolBuilder ConfigureProtocol(ProtocolBuilder protocolBuilder) =>
@@ -73,9 +71,7 @@ internal sealed partial class SignozExecutor : Executor
 
         var response = await httpClient.PostAsJsonAsync(SigNozUrl, requestBody, cancellationToken);
 
-        _logger.LogInformation(
-            "[SignozExecutor] SigNoz query sent — TicketId={Id}, UserId={UserId}, StatusCode={StatusCode}",
-            input.Ticket.Id, input.Ticket.UserId, response.StatusCode);
+        Console.WriteLine($"[Step 2] SigNoz    → Logs fetched (HTTP {(int)response.StatusCode}) for TicketId={input.Ticket.Id}, UserId={input.Ticket.UserId}");
 
         var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
 

@@ -8,7 +8,6 @@ namespace TicketTriageAgent.WorkerService.Agents;
 internal sealed partial class GitHubIssueAgentExecutor : Executor
 {
     private readonly AIAgent _agent;
-    private readonly ILogger _logger;
     private readonly string _owner;
     private readonly string _repo;
 
@@ -17,11 +16,10 @@ internal sealed partial class GitHubIssueAgentExecutor : Executor
         WriteIndented = false
     };
 
-    public GitHubIssueAgentExecutor(AIAgent agent, ILogger logger, string owner, string repo)
+    public GitHubIssueAgentExecutor(AIAgent agent, string owner, string repo)
         : base("GitHubIssueAgent")
     {
         _agent = agent;
-        _logger = logger;
         _owner = owner;
         _repo = repo;
     }
@@ -38,10 +36,6 @@ internal sealed partial class GitHubIssueAgentExecutor : Executor
         IWorkflowContext context,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation(
-            "[GitHubIssueAgentExecutor] Building GitHub issue prompt — TicketId={Id}, Repo={Owner}/{Repo}",
-            input.Ticket.Id, _owner, _repo);
-
         var ticketJson = JsonSerializer.Serialize(input.Ticket, s_jsonOptions);
         var triageJson = JsonSerializer.Serialize(input.Triage, s_jsonOptions);
 
@@ -63,9 +57,7 @@ internal sealed partial class GitHubIssueAgentExecutor : Executor
 
         var response = await _agent.RunAsync(prompt, cancellationToken: cancellationToken);
 
-        _logger.LogInformation(
-            "[GitHubIssueAgentExecutor] Issue creation completed — TicketId={Id}, IssueUrl={Url}",
-            input.Ticket.Id, response.Text);
+        Console.WriteLine($"[Step 3] GitHub    → Issue created: {response.Text.Trim()}");
 
         return new GitHubIssueResult
         {

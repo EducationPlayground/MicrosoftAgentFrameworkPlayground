@@ -30,6 +30,8 @@ internal sealed partial class TriageExecutor : Executor
         var response = await _triageAgent.RunAsync(input.Prompt);
         var triageResult = JsonSerializer.Deserialize<TriageResult>(response.Text, JsonSerializerOptions.Web);
 
+        Console.WriteLine($"[Step 1] Triage    → {triageResult?.Category} | {triageResult?.Severity} | Team: {triageResult?.SuggestedTeam}");
+
         return new TriageResultWithTicket
         {
             Triage = triageResult,
