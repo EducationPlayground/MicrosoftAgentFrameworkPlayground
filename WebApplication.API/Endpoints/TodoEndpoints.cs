@@ -65,10 +65,9 @@ public static class TodoEndpoints
 
         group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var newTodo = new TodoItem { Title = null! };
-
-            // NullReferenceException: Title is null
-            var result = newTodo.Title.GetHashCode();
+            var a = 100;
+            var b = 0;
+            var c = a / b;
 
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
