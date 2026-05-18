@@ -1,10 +1,180 @@
 ﻿@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Linear Chat";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h1 class="display-6 mb-3">Basic Linear Chat</h1>
+        <p class="text-muted mb-4">Client-side storage keeps a session id and rendered history in your browser. The API uses in-memory history keyed by that session id.</p>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <label for="sessionId" class="form-label mb-0">Session Id</label>
+                    <input id="sessionId" class="form-control" style="max-width: 360px;" readonly />
+                    <button id="newChat" type="button" class="btn btn-outline-secondary">New Chat</button>
+                </div>
+
+                <div id="chatHistory" class="border rounded p-3 mb-3" style="height: 360px; overflow-y: auto; background: #fafafa;"></div>
+
+                <form id="chatForm">
+                    @Html.AntiForgeryToken()
+                    <div class="input-group">
+                        <input id="messageInput" class="form-control" placeholder="Type a message" autocomplete="off" />
+                        <button class="btn btn-primary" type="submit">Send</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+<script>
+(() => {
+    const sessionStorageKey = "basic-linear-chat-session-id";
+    const historyStoragePrefix = "basic-linear-chat-history-";
+
+    const sessionIdInput = document.getElementById("sessionId");
+    const chatHistory = document.getElementById("chatHistory");
+    const chatForm = document.getElementById("chatForm");
+    const messageInput = document.getElementById("messageInput");
+    const newChatButton = document.getElementById("newChat");
+    const antiForgeryToken = document.querySelector("input[name='__RequestVerificationToken']").value;
+
+    const createSessionId = () => {
+        if (window.crypto && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    };
+
+    const getSessionId = () => {
+        const existing = localStorage.getItem(sessionStorageKey);
+        if (existing) {
+            return existing;
+        }
+
+        const generated = createSessionId();
+        localStorage.setItem(sessionStorageKey, generated);
+        return generated;
+    };
+
+    const setSessionId = (value) => {
+        localStorage.setItem(sessionStorageKey, value);
+        sessionIdInput.value = value;
+    };
+
+    const getHistoryKey = (sessionId) => `${historyStoragePrefix}${sessionId}`;
+
+    const loadLocalHistory = (sessionId) => {
+        const raw = localStorage.getItem(getHistoryKey(sessionId));
+        if (!raw) {
+            return [];
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    };
+
+    const saveLocalHistory = (sessionId, history) => {
+        localStorage.setItem(getHistoryKey(sessionId), JSON.stringify(history));
+    };
+
+    const renderHistory = (history) => {
+        chatHistory.innerHTML = "";
+
+        if (!history.length) {
+            chatHistory.innerHTML = '<p class="text-muted mb-0">No messages yet.</p>';
+            return;
+        }
+
+        history.forEach(item => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "mb-2";
+
+            const roleLabel = (item.role || "assistant").toLowerCase() === "user" ? "You" : "Assistant";
+            wrapper.innerHTML = `<strong>${roleLabel}:</strong> ${escapeHtml(item.content || "")}`;
+            chatHistory.appendChild(wrapper);
+        });
+
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    };
+
+    const escapeHtml = (value) => value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const initialize = () => {
+        const sessionId = getSessionId();
+        sessionIdInput.value = sessionId;
+        renderHistory(loadLocalHistory(sessionId));
+    };
+
+    newChatButton.addEventListener("click", () => {
+        const sessionId = createSessionId();
+        setSessionId(sessionId);
+        renderHistory([]);
+    });
+
+    chatForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const message = messageInput.value.trim();
+        if (!message) {
+            return;
+        }
+
+        const sessionId = sessionIdInput.value;
+        const currentHistory = loadLocalHistory(sessionId);
+        currentHistory.push({ role: "user", content: message });
+        renderHistory(currentHistory);
+        saveLocalHistory(sessionId, currentHistory);
+        messageInput.value = "";
+
+        try {
+            const response = await fetch("/?handler=Chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "RequestVerificationToken": antiForgeryToken
+                },
+                body: JSON.stringify({ sessionId, message })
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload?.error || "Request failed.");
+            }
+
+            const normalizedHistory = Array.isArray(payload.history)
+                ? payload.history.map(item => ({
+                    role: item.role || "assistant",
+                    content: item.content || ""
+                }))
+                : [...currentHistory, { role: "assistant", content: payload.reply || "" }];
+
+            saveLocalHistory(sessionId, normalizedHistory);
+            renderHistory(normalizedHistory);
+        } catch (error) {
+            const failedHistory = loadLocalHistory(sessionId);
+            failedHistory.push({ role: "assistant", content: `Error: ${error.message}` });
+            saveLocalHistory(sessionId, failedHistory);
+            renderHistory(failedHistory);
+        }
+    });
+
+    initialize();
+})();
+</script>
+}
