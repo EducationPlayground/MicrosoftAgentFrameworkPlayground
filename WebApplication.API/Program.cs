@@ -4,9 +4,11 @@ using Microsoft.Extensions.AI;
 using MicrosoftAgentFrameworkPlayground.ServiceDefaults;
 using OpenAI;
 using Scalar.AspNetCore;
+using Microsoft.EntityFrameworkCore;
+using WebApplication.API.Data;
+using WebApplication.API.Providers;
 
-
-var builder = WebApplication.CreateBuilder(args);
+var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
@@ -22,6 +24,8 @@ builder.Services.AddSession(options =>
 });
 
 // Database
+builder.Services.AddDbContext<ChatHistoryDbContext>(options =>
+    options.UseInMemoryDatabase("ChatHistoryDb"));
 
 
 // OpenAI
@@ -31,7 +35,7 @@ var openAiKey = Environment.GetEnvironmentVariable("OPEN_AI_KEY")
 var openAiClient = new OpenAIClient(openAiKey);
 
 builder.Services.AddChatClient(openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient());
-builder.Services.AddSingleton<AIAgent>(_ =>
+builder.Services.AddSingleton<AIAgent>(sp =>
     openAiClient
         .GetChatClient("gpt-4o-mini")
         .AsIChatClient()
@@ -42,7 +46,7 @@ builder.Services.AddSingleton<AIAgent>(_ =>
             {
                 Instructions = "You are a helpful assistant. Keep replies short and clear."
             },
-            ChatHistoryProvider = new InMemoryChatHistoryProvider()
+            ChatHistoryProvider = new EfCoreChatHistoryProvider(sp)
         }));
 var app = builder.Build();
 
