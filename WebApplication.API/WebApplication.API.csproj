@@ -28,4 +28,10 @@
     <ProjectReference Include="..\MicrosoftAgentFrameworkPlayground.ServiceDefaults\MicrosoftAgentFrameworkPlayground.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Data\" />
+    <Folder Include="Endpoints\" />
+    <Folder Include="Services\" />
+  </ItemGroup>
+
 </Project>
