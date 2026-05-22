@@ -32,7 +32,7 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
         
         // Scope to access EF Core DbContext
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ChatHistoryDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         var dbState = await dbContext.ChatSessionStates.FindAsync([state.DbKey], cancellationToken);
         if (dbState != null)
@@ -51,7 +51,7 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
         var state = this._sessionState.GetOrInitializeState(context.Session);
         
         using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ChatHistoryDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         var dbState = await dbContext.ChatSessionStates.FindAsync([state.DbKey], cancellationToken);
         
