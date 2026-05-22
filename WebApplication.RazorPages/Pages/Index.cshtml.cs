@@ -19,13 +19,13 @@ namespace WebApplication.RazorPages.Pages
 
         public async Task<IActionResult> OnPostChatAsync([FromBody] ChatRequest request, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.SessionId) || string.IsNullOrWhiteSpace(request.Message))
+            if (string.IsNullOrWhiteSpace(request.Message))
             {
-                return BadRequest(new { error = "sessionId and message are required." });
+                return BadRequest(new { error = "message is required." });
             }
 
             var client = _httpClientFactory.CreateClient("ChatApi");
-            using var response = await client.PostAsJsonAsync("/chat", request, cancellationToken);
+            using var response = await client.PostAsJsonAsync("/chat", new { Message = request.Message }, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -42,7 +42,7 @@ namespace WebApplication.RazorPages.Pages
             return new JsonResult(chatResponse);
         }
 
-        public sealed record ChatRequest(string SessionId, string Message);
+        public sealed record ChatRequest(string Message);
         public sealed record ChatResponse(string SessionId, string Reply);
     }
 }

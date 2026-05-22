@@ -6,24 +6,26 @@
 
 <div class="row justify-content-center">
     <div class="col-lg-8">
-        <h1 class="display-6 mb-3">Basic Linear Chat</h1>
-        <p class="text-muted mb-4">Client-side storage keeps a session id and rendered history in your browser. The API uses in-memory history keyed by that session id.</p>
+        <h1 class="display-6 mb-3">Customer Service Chatbot</h1>
+        <p class="text-muted mb-4">Chat with our AI assistant about our products.</p>
 
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-                    <label for="sessionId" class="form-label mb-0">Session Id</label>
-                    <input id="sessionId" class="form-control" style="max-width: 360px;" readonly />
-                    <button id="newChat" type="button" class="btn btn-outline-secondary">New Chat</button>
+                    <label for="sessionId" class="form-label mb-0" style="display:none;">Session Id</label>
+                    <input id="sessionId" class="form-control" style="max-width: 360px; display:none;" readonly />
+                    <button id="newChat" type="button" class="btn btn-outline-secondary">Clear Local History</button>
                 </div>
 
-                <div id="chatHistory" class="border rounded p-3 mb-3" style="height: 360px; overflow-y: auto; background: #fafafa;"></div>
+                <div id="chatHistory" class="border rounded p-3 mb-3 d-flex flex-column gap-3" style="height: 450px; overflow-y: auto; background: #fafafa;"></div>
 
                 <form id="chatForm">
                     @Html.AntiForgeryToken()
                     <div class="input-group">
-                        <input id="messageInput" class="form-control" placeholder="Type a message" autocomplete="off" />
-                        <button class="btn btn-primary" type="submit">Send</button>
+                        <input id="messageInput" class="form-control" placeholder="Ask about products, prices or stock..." autocomplete="off" />
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-send"></i> Send
+                        </button>
                     </div>
                 </form>
             </div>
@@ -98,10 +100,17 @@
 
         history.forEach(item => {
             const wrapper = document.createElement("div");
-            wrapper.className = "mb-2";
+            wrapper.className = "d-flex w-100 flex-column";
 
-            const roleLabel = (item.role || "assistant").toLowerCase() === "user" ? "You" : "Assistant";
-            wrapper.innerHTML = `<strong>${roleLabel}:</strong> ${escapeHtml(item.content || "")}`;
+            const isUser = (item.role || "assistant").toLowerCase() === "user";
+
+            wrapper.innerHTML = `
+                <div class="p-2 rounded ${isUser ? 'bg-primary text-white align-self-end' : 'bg-white border align-self-start'}" style="max-width: 80%;">
+                    <div class="small ${isUser ? 'text-white-50' : 'text-muted'} mb-1">${isUser ? 'You' : 'Assistant'}</div>
+                    <div class="message-content">${escapeHtml(item.content || "").replace(/\n/g, '<br/>')}</div>
+                </div>
+            `;
+
             chatHistory.appendChild(wrapper);
         });
 
@@ -149,12 +158,17 @@
                     "Content-Type": "application/json",
                     "RequestVerificationToken": antiForgeryToken
                 },
-                body: JSON.stringify({ sessionId, message })
+                body: JSON.stringify({ message })
             });
 
             const payload = await response.json();
             if (!response.ok) {
                 throw new Error(payload?.error || "Request failed.");
+            }
+
+            // We update the session Id dynamically if returned by the backend
+            if (payload.sessionId) {
+                setSessionId(payload.sessionId);
             }
 
             const normalizedHistory = Array.isArray(payload.history)
