@@ -7,6 +7,7 @@ using Scalar.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using WebApplication.API.Data;
 using WebApplication.API.Providers;
+using System.Text.Json;
 
 var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
 
@@ -78,6 +79,75 @@ if (app.Environment.IsDevelopment())
 }
 
 // Map endpoints
+app.MapGet("/chat/history", async (AIAgent agent, HttpContext httpContext, CancellationToken cancellationToken) =>
+{
+    var sessionJson = httpContext.Session.GetString("AgentSessionData");
+    if (string.IsNullOrEmpty(sessionJson))
+    {
+        return Results.Ok(new List<ChatMessageDto>());
+    }
+
+    var jsonElement = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(sessionJson);
+    var session = await agent.DeserializeSessionAsync(jsonElement, cancellationToken: cancellationToken);
+
+    // EfCoreChatHistoryProvider içindeki sessionState alanına erişmek için bir provider örneği yapıyoruz
+    var stateInitializer = (AgentSession? s) => new EfCoreChatHistoryProvider.State();
+    var providerSessionState = new ProviderSessionState<EfCoreChatHistoryProvider.State>(stateInitializer, typeof(EfCoreChatHistoryProvider).Name);
+    var state = providerSessionState.GetOrInitializeState(session);
+
+    if (state == null || string.IsNullOrEmpty(state.DbKey))
+    {
+        return Results.Ok(new List<ChatMessageDto>());
+    }
+
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var dbState = await dbContext.ChatSessionStates.FindAsync([state.DbKey], cancellationToken);
+    if (dbState != null)
+    {
+        // DB içindeki ChatMessage listesini deserialize edip rolü user veya assistant olanları alıyoruz.
+        // ChatMessage'ların rollerini ve yazılarını dto ya mapliyoruz.
+        var chatMessages = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(dbState.MessagesJson);
+        if (chatMessages != null)
+        {
+            var result = new List<ChatMessageDto>();
+            foreach (var msg in chatMessages)
+            {
+                // Sadece "user" ve "assistant" rollerini alıyoruz, tool vb. dışındakileri eliyoruz.
+                if (!msg.TryGetProperty("Role", out var roleProp)) continue;
+                var role = roleProp.GetString() ?? "";
+                if (!role.Equals("user", StringComparison.OrdinalIgnoreCase) && !role.Equals("assistant", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Sadece text içeren gerçek mesajları almak için Contents dizisindeki text tipindeki elemanları birleştiriyoruz.
+                if (msg.TryGetProperty("Contents", out var contentsProp) && contentsProp.ValueKind == JsonValueKind.Array)
+                {
+                    var contentText = "";
+                    foreach (var contentItem in contentsProp.EnumerateArray())
+                    {
+                        if (contentItem.TryGetProperty("$type", out var typeProp) && 
+                            typeProp.GetString() == "text" && 
+                            contentItem.TryGetProperty("Text", out var textProp))
+                        {
+                            contentText += textProp.GetString() ?? "";
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(contentText))
+                    {
+                        result.Add(new ChatMessageDto(role, contentText));
+                    }
+                }
+            }
+            return Results.Ok(result);
+        }
+    }
+
+    return Results.Ok(new List<ChatMessageDto>());
+});
+
 app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>>
     (ChatRequest request, AIAgent agent, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
@@ -122,3 +192,5 @@ app.Run();
 public sealed record ChatRequest(string Message);
 
 public sealed record ChatResponse(string SessionId, string Reply);
+
+public sealed record ChatMessageDto(string Role, string Content);

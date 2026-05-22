@@ -12,12 +12,24 @@
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-                    <label for="sessionId" class="form-label mb-0" style="display:none;">Session Id</label>
-                    <input id="sessionId" class="form-control" style="max-width: 360px; display:none;" readonly />
                     <button id="newChat" type="button" class="btn btn-outline-secondary">Clear Local History</button>
                 </div>
 
-                <div id="chatHistory" class="border rounded p-3 mb-3 d-flex flex-column gap-3" style="height: 450px; overflow-y: auto; background: #fafafa;"></div>
+                <div id="chatHistory" class="border rounded p-3 mb-3 d-flex flex-column gap-3" style="height: 450px; overflow-y: auto; background: #fafafa;">
+                    @if (Model.ChatHistory != null && Model.ChatHistory.Any())
+                    {
+                        @foreach (var item in Model.ChatHistory)
+                        {
+                            var isUser = item.Role.Equals("user", StringComparison.OrdinalIgnoreCase);
+                            <div class="d-flex w-100 flex-column">
+                                <div class="p-2 rounded @(isUser ? "bg-primary text-white align-self-end" : "bg-white border align-self-start")" style="max-width: 80%;">
+                                    <div class="small @(isUser ? "text-white-50" : "text-muted") mb-1">@(isUser ? "You" : "Assistant")</div>
+                                    <div class="message-content">@Html.Raw(Html.Encode(item.Content).Replace("\n", "<br/>"))</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
 
                 <form id="chatForm">
                     @Html.AntiForgeryToken()
@@ -36,58 +48,29 @@
 @section Scripts {
 <script>
 (() => {
-    const sessionStorageKey = "basic-linear-chat-session-id";
-    const historyStoragePrefix = "basic-linear-chat-history-";
+    // Sadece geçmişi kaydetmek için varsayılan bir anahtar kullanıyoruz
+    const historyStorageKey = "customer-service-chat-history";
 
-    const sessionIdInput = document.getElementById("sessionId");
     const chatHistory = document.getElementById("chatHistory");
     const chatForm = document.getElementById("chatForm");
     const messageInput = document.getElementById("messageInput");
     const newChatButton = document.getElementById("newChat");
     const antiForgeryToken = document.querySelector("input[name='__RequestVerificationToken']").value;
 
-    const createSessionId = () => {
-        if (window.crypto && crypto.randomUUID) {
-            return crypto.randomUUID();
-        }
-
-        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const loadLocalHistory = () => {
+        // Tarayıcı local storage'ında artık tutmuyoruz, sadece UI'daki yapıyı korumak adına runtime list olarak dönebilir.
+        // Veya doğrudan ekrandaki elementlerden okuyabilirsiniz. Ancak en doğrusu, sayfa yenilendiğinde zaten HTML içinden render olmasıdır.
+        const list = [];
+        document.querySelectorAll("#chatHistory > div").forEach(item => {
+            const role = item.querySelector(".small").textContent.trim() === "You" ? "user" : "assistant";
+            const content = item.querySelector(".message-content").innerHTML.replace(/<br\s*\/?>/gi, "\n");
+            list.push({ role, content });
+        });
+        return list;
     };
 
-    const getSessionId = () => {
-        const existing = localStorage.getItem(sessionStorageKey);
-        if (existing) {
-            return existing;
-        }
-
-        const generated = createSessionId();
-        localStorage.setItem(sessionStorageKey, generated);
-        return generated;
-    };
-
-    const setSessionId = (value) => {
-        localStorage.setItem(sessionStorageKey, value);
-        sessionIdInput.value = value;
-    };
-
-    const getHistoryKey = (sessionId) => `${historyStoragePrefix}${sessionId}`;
-
-    const loadLocalHistory = (sessionId) => {
-        const raw = localStorage.getItem(getHistoryKey(sessionId));
-        if (!raw) {
-            return [];
-        }
-
-        try {
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
-    };
-
-    const saveLocalHistory = (sessionId, history) => {
-        localStorage.setItem(getHistoryKey(sessionId), JSON.stringify(history));
+    const saveLocalHistory = (history) => {
+        // Web tarayıcısında artık history tutmuyoruz (localStorage kullanılmıyor)
     };
 
     const renderHistory = (history) => {
@@ -107,7 +90,7 @@
             wrapper.innerHTML = `
                 <div class="p-2 rounded ${isUser ? 'bg-primary text-white align-self-end' : 'bg-white border align-self-start'}" style="max-width: 80%;">
                     <div class="small ${isUser ? 'text-white-50' : 'text-muted'} mb-1">${isUser ? 'You' : 'Assistant'}</div>
-                    <div class="message-content">${escapeHtml(item.content || "").replace(/\n/g, '<br/>')}</div>
+                    <div class="message-content">${escapeHtml(item.content || "").replace(/\\n/g, '<br/>').replace(/\n/g, '<br/>')}</div>
                 </div>
             `;
 
@@ -125,15 +108,13 @@
         .replaceAll("'", "&#39;");
 
     const initialize = () => {
-        const sessionId = getSessionId();
-        sessionIdInput.value = sessionId;
-        renderHistory(loadLocalHistory(sessionId));
+        chatHistory.scrollTop = chatHistory.scrollHeight;
     };
 
     newChatButton.addEventListener("click", () => {
-        const sessionId = createSessionId();
-        setSessionId(sessionId);
-        renderHistory([]);
+        chatHistory.innerHTML = '<p class="text-muted mb-0">No messages yet.</p>';
+        // Not: Server session verisini silmek için isterseniz backend'e bir istek de atabilirsiniz, 
+        // ancak yerel temizlik için sadece ekranı temizliyoruz. Sayfa yenilendiğinde güncel API state'i gelecektir.
     });
 
     chatForm.addEventListener("submit", async (event) => {
@@ -144,11 +125,9 @@
             return;
         }
 
-        const sessionId = sessionIdInput.value;
-        const currentHistory = loadLocalHistory(sessionId);
+        const currentHistory = loadLocalHistory();
         currentHistory.push({ role: "user", content: message });
         renderHistory(currentHistory);
-        saveLocalHistory(sessionId, currentHistory);
         messageInput.value = "";
 
         try {
@@ -166,24 +145,11 @@
                 throw new Error(payload?.error || "Request failed.");
             }
 
-            // We update the session Id dynamically if returned by the backend
-            if (payload.sessionId) {
-                setSessionId(payload.sessionId);
-            }
-
-            const normalizedHistory = Array.isArray(payload.history)
-                ? payload.history.map(item => ({
-                    role: item.role || "assistant",
-                    content: item.content || ""
-                }))
-                : [...currentHistory, { role: "assistant", content: payload.reply || "" }];
-
-            saveLocalHistory(sessionId, normalizedHistory);
+            const normalizedHistory = [...currentHistory, { role: "assistant", content: payload.reply || "" }];
             renderHistory(normalizedHistory);
         } catch (error) {
-            const failedHistory = loadLocalHistory(sessionId);
+            const failedHistory = loadLocalHistory();
             failedHistory.push({ role: "assistant", content: `Error: ${error.message}` });
-            saveLocalHistory(sessionId, failedHistory);
             renderHistory(failedHistory);
         }
     });
