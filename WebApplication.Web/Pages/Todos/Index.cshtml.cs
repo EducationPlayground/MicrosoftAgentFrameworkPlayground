@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -12,6 +13,7 @@ public class TodoItem
     public DateTime CreatedAt { get; set; }
 }
 
+[Authorize]
 public class IndexModel(IHttpClientFactory httpClientFactory) : PageModel
 {
     public List<TodoItem> Todos { get; set; } = [];

@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace WebApplication.Web.Pages.Todos;
 
+[Authorize]
 public class EditModel(IHttpClientFactory httpClientFactory) : PageModel
 {
     [BindProperty(SupportsGet = true)]
