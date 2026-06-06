@@ -63,16 +63,31 @@ public static class TodoEndpoints
             return Results.Ok(todo);
         });
 
-        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
+        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db, ILogger<Program> logger) =>
         {
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier)
                          ?? user.FindFirstValue("sub");
-            var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
-            if (todo is null) return Results.NotFound();
 
-            db.Todos.Remove(todo);
-            await db.SaveChangesAsync();
-            return Results.NoContent();
+            if (id <= 0)
+            {
+                logger.LogWarning("Invalid todo delete request with id {TodoId} for user {UserId}", id, userId ?? "unknown");
+                return Results.BadRequest("Todo id must be greater than zero.");
+            }
+
+            try
+            {
+                var todo = await db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
+                if (todo is null) return Results.NotFound();
+
+                db.Todos.Remove(todo);
+                await db.SaveChangesAsync();
+                return Results.NoContent();
+            }
+            catch (DivideByZeroException ex)
+            {
+                logger.LogError(ex, "Divide by zero while deleting todo {TodoId} for user {UserId}", id, userId ?? "unknown");
+                return Results.Problem("Unable to delete todo item due to an internal numeric error.");
+            }
         });
 
         return app;
