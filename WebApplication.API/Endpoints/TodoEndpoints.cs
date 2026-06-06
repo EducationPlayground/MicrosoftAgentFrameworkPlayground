@@ -83,6 +83,7 @@ public static class TodoEndpoints
                 await db.SaveChangesAsync();
                 return Results.NoContent();
             }
+            // Ticket #2 reported DivideByZeroException from this route; keep endpoint resilient and log input values.
             catch (DivideByZeroException ex)
             {
                 logger.LogError(ex, "Divide by zero while deleting todo {TodoId} for user {UserId}", id, userId ?? "unknown");
