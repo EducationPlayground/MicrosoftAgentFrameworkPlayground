@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/AgentSchema/refs/heads/main/schemas/v1.0/ContainerAgent.yaml
+# Microsoft Foundry Hosted Agent tanımı (container / ACR imajı ile deploy).
+# Bkz: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/deploy-hosted-agent
+
+kind: hosted
+name: deployfoundrycustomeragent
+description: E-ticaret müşteri hizmetleri asistanı (Microsoft Agent Framework, .NET 10).
+
+# Agent'ın konuştuğu protokol. Bu uygulama /responses endpoint'ini sunar (MapResponsesServer).
+protocols:
+  - protocol: responses
+    version: "1.0.0"
+
+# ACR'ye push edilen container imajı (readme.txt'deki akış ile uyumlu).
+# code_configuration yerine image kullanıldığında Foundry, Dockerfile build etmeden bu imajı doğrudan çalıştırır.
+image: educationfoundry.azurecr.io/deployfoundrycustomeragent:latest
+
+# Container'ın dinlediği port (Dockerfile: EXPOSE 8080).
+container_port: 8080
+
+# Container kaynak tier'ı. Geçerli değerler: 0.25/0.5Gi, 1/2Gi, 2/4Gi.
+resources:
+  cpu: "1"
+  memory: "2Gi"
+
+# Ortam değişkenleri.
+# NOT: FOUNDRY_* ve AGENT_* değişkenleri platform tarafından runtime'da otomatik enjekte edilir;
+# bunları buraya EKLEMEYİN. ${VAR} ifadeleri aktif azd environment'ından çözümlenir.
+environment_variables:
+  - name: MODEL_DEPLOYMENT_NAME
+    value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}

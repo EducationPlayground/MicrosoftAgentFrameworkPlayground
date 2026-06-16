@@ -1,6 +1,6 @@
 services:
   deployfoundrycustomeragent:
-    image: ${DOCKER_REGISTRY-}deployfoundrycustomeragent
+    image: educationfoundry.azurecr.io/deployfoundrycustomeragent:latest
     build:
       context: .
       dockerfile: DeployFoundryCustomerAgent/Dockerfile

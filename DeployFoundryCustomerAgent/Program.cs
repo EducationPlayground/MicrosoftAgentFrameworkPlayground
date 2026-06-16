@@ -25,11 +25,17 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 
     // FOUNDRY_PROJECT_ENDPOINT ve MODEL_DEPLOYMENT_NAME Foundry tarafından otomatik enjekte edilir.
     // Lokal geliştirmede appsettings.json veya user-secrets üzerinden set edilebilir.
+    var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
     var endpoint = builder.Configuration["FOUNDRY_PROJECT_ENDPOINT"]!;
+    logger.LogInformation("FOUNDRY_PROJECT_ENDPOINT: {Endpoint}", endpoint);
 
     var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]!;
+    logger.LogInformation("MODEL_DEPLOYMENT_NAME: {DeploymentName}", deploymentName);
+
     // Lokal geliştirmede ApiKey varsa kullan; Foundry'de managed identity (DefaultAzureCredential) devreye girer.
     var apiKey = builder.Configuration["APIKEY"];
+    logger.LogInformation("APIKEY configured: {HasApiKey}", !string.IsNullOrEmpty(apiKey));
     IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
         ? new AzureOpenAIClient(
             new Uri(endpoint),
@@ -70,6 +76,9 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 
 var app = builder.Build();
 
+// AIAgent singleton'ını startup'ta resolve et — loglar uygulama ayağa kalktığında yazılsın
+
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -79,6 +88,5 @@ if (app.Environment.IsDevelopment())
 //   POST /responses  — sohbet, streaming, multi-turn
 //   GET  /readiness  — platform health check
 app.MapResponsesServer();
-
 app.Run();
 
