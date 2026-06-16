@@ -25,16 +25,11 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 
     // FOUNDRY_PROJECT_ENDPOINT ve MODEL_DEPLOYMENT_NAME Foundry tarafından otomatik enjekte edilir.
     // Lokal geliştirmede appsettings.json veya user-secrets üzerinden set edilebilir.
-    var endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
-                   ?? builder.Configuration["Foundry:Endpoint"]
-                   ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT env var is not set.");
+    var endpoint = builder.Configuration["FOUNDRY_PROJECT_ENDPOINT"]!;
 
-    var deploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME")
-                         ?? builder.Configuration["Foundry:DeploymentName"]
-                         ?? throw new InvalidOperationException("MODEL_DEPLOYMENT_NAME env var is not set.");
-
+    var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]!;
     // Lokal geliştirmede ApiKey varsa kullan; Foundry'de managed identity (DefaultAzureCredential) devreye girer.
-    var apiKey = builder.Configuration["Foundry:ApiKey"];
+    var apiKey = builder.Configuration["APIKEY"];
     IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
         ? new AzureOpenAIClient(
             new Uri(endpoint),

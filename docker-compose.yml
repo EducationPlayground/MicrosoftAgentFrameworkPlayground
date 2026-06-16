@@ -1,0 +1,6 @@
+services:
+  deployfoundrycustomeragent:
+    image: ${DOCKER_REGISTRY-}deployfoundrycustomeragent
+    build:
+      context: .
+      dockerfile: DeployFoundryCustomerAgent/Dockerfile
