@@ -1,4 +1,3 @@
 <Solution>
-  <Project Path="PromptAgentViaCode/PromptAgentViaCode.csproj" Id="e65c4b3b-d7b3-4ad3-9200-3b838561dabd" />
-  <Project Path="ResponsesAPIAgentViaCode/ResponsesAPIAgentViaCode.csproj" Id="62a29fbb-a66f-4674-bfc8-90c8dabbd2a8" />
+  <Project Path="DeployFoundryCustomerAgent/DeployFoundryCustomerAgent.csproj" Id="80a285c8-6b30-474c-9e74-a43763c61a4c" />
 </Solution>
