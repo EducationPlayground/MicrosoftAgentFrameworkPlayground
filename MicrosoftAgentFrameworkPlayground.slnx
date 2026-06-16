@@ -1,3 +1,4 @@
 <Solution>
-  <Project Path="WebApplication.API/WebApplication.API.csproj" />
+  <Project Path="PromptAgentViaCode/PromptAgentViaCode.csproj" Id="e65c4b3b-d7b3-4ad3-9200-3b838561dabd" />
+  <Project Path="ResponsesAPIAgentViaCode/ResponsesAPIAgentViaCode.csproj" Id="62a29fbb-a66f-4674-bfc8-90c8dabbd2a8" />
 </Solution>
