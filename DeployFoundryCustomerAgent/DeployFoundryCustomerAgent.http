@@ -1,28 +1,28 @@
 @DeployFoundryCustomerAgent_HostAddress = https://localhost:7041
 
-### Start a new chat session
-POST {{DeployFoundryCustomerAgent_HostAddress}}/chat
+### 1. Yeni sohbet başlat (conversationId göndermiyoruz)
+POST {{DeployFoundryCustomerAgent_HostAddress}}/responses
 Content-Type: application/json
 
 {
-  "message": "Merhaba, laptop arıyorum. Öneriniz var mı?",
-  "sessionId": null
+  "input": "Kablosuz Kulaklık fiyatı nedir?"
 }
 
 ###
 
-### Continue existing session (replace SESSION_ID with the id from the previous response)
-POST {{DeployFoundryCustomerAgent_HostAddress}}/chat
+### 2. Aynı oturumu devam ettir
+### Yanıttaki "id" değerini conversationId olarak gönder
+POST {{DeployFoundryCustomerAgent_HostAddress}}/responses
 Content-Type: application/json
 
 {
-  "message": "Fiyat aralığı nedir?",
-  "sessionId": "SESSION_ID"
+  "input": "biraz önce ne sordum?",
+  "conversationId": "29e9f575-36a6-42b3-819a-76727b3ce55d"
 }
 
 ###
 
-### Delete a session
-DELETE {{DeployFoundryCustomerAgent_HostAddress}}/chat/SESSION_ID
+### 3. Sağlık kontrolü
+GET {{DeployFoundryCustomerAgent_HostAddress}}/readiness
 
 ###

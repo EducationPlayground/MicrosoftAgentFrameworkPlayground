@@ -59,6 +59,7 @@ public static class ResponsesServerExtensions
             return Results.Ok(new
             {
                 id = result.SessionId,
+                session_id = result.SessionId,   // bir sonraki istekte conversationId olarak gönder
                 output = result.Output,
                 status = "completed"
             });
