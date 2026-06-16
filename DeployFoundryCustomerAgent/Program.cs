@@ -3,12 +3,13 @@ using DeployFoundryCustomerAgent.Agent;
 using DeployFoundryCustomerAgent.Services;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Caching.Memory;
 using System.ClientModel;
-using System.Collections.Concurrent;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddMemoryCache();
 
 // Register in-memory product data store and tools
 builder.Services.AddSingleton<ProductDataStore>();
@@ -28,6 +29,7 @@ builder.Services.AddSingleton<AIAgent>(sp =>
     return chatClient.AsAIAgent(new ChatClientAgentOptions
     {
         Name = "CustomerServiceAgent",
+        ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()),
         ChatOptions = new ChatOptions
         {
             Instructions = """
@@ -54,9 +56,6 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 
 var app = builder.Build();
 
-// In-memory session store: sessionId -> AgentSession
-var sessions = new ConcurrentDictionary<string, AgentSession>();
-
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -66,14 +65,14 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // POST /chat  — send a message to the customer agent
-app.MapPost("/chat", async (ChatRequest request, AIAgent agent, CancellationToken ct) =>
+app.MapPost("/chat", async (ChatRequest request, AIAgent agent, IMemoryCache cache, CancellationToken ct) =>
 {
     var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
 
-    if (!sessions.TryGetValue(sessionId, out var session))
+    if (!cache.TryGetValue(sessionId, out AgentSession? session) || session is null)
     {
         session = await agent.CreateSessionAsync(ct);
-        sessions[sessionId] = session;
+        cache.Set(sessionId, session);
     }
 
     var reply = await agent.RunAsync(request.Message, session, cancellationToken: ct);
@@ -82,9 +81,9 @@ app.MapPost("/chat", async (ChatRequest request, AIAgent agent, CancellationToke
 });
 
 // DELETE /chat/{sessionId}  — clear a session
-app.MapDelete("/chat/{sessionId}", (string sessionId) =>
+app.MapDelete("/chat/{sessionId}", (string sessionId, IMemoryCache cache) =>
 {
-    sessions.TryRemove(sessionId, out _);
+    cache.Remove(sessionId);
     return Results.NoContent();
 });
 
