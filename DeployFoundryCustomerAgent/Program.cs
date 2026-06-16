@@ -1,10 +1,10 @@
 using Azure.AI.OpenAI;
+using Azure.Identity;
 using DeployFoundryCustomerAgent.Agent;
+using DeployFoundryCustomerAgent.Protocol;
 using DeployFoundryCustomerAgent.Services;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Caching.Memory;
-using System.ClientModel;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,20 +15,39 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ProductDataStore>();
 builder.Services.AddSingleton<CustomerAgentTools>();
 
-// Register AIAgent using Azure AI Foundry (AzureOpenAI endpoint + API key)
+// Register the ResponseHandler (Foundry Hosted Agent protocol)
+builder.Services.AddResponsesServer<CustomerAgentHandler>();
+
+// Register AIAgent — config env var'larından okunur (Foundry otomatik enjekte eder)
 builder.Services.AddSingleton<AIAgent>(sp =>
 {
-    var config = sp.GetRequiredService<IConfiguration>();
     var tools = sp.GetRequiredService<CustomerAgentTools>();
 
-    IChatClient chatClient = new AzureOpenAIClient(
-        new Uri(config["Foundry:Endpoint"]!),
-        new ApiKeyCredential(config["Foundry:ApiKey"]!)
-    ).GetChatClient(config["Foundry:DeploymentName"]!).AsIChatClient();
+    // FOUNDRY_PROJECT_ENDPOINT ve MODEL_DEPLOYMENT_NAME Foundry tarafından otomatik enjekte edilir.
+    // Lokal geliştirmede appsettings.json veya user-secrets üzerinden set edilebilir.
+    var endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
+                   ?? builder.Configuration["Foundry:Endpoint"]
+                   ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT env var is not set.");
+
+    var deploymentName = Environment.GetEnvironmentVariable("MODEL_DEPLOYMENT_NAME")
+                         ?? builder.Configuration["Foundry:DeploymentName"]
+                         ?? throw new InvalidOperationException("MODEL_DEPLOYMENT_NAME env var is not set.");
+
+    // Lokal geliştirmede ApiKey varsa kullan; Foundry'de managed identity (DefaultAzureCredential) devreye girer.
+    var apiKey = builder.Configuration["Foundry:ApiKey"];
+    IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
+        ? new AzureOpenAIClient(
+            new Uri(endpoint),
+            new System.ClientModel.ApiKeyCredential(apiKey)
+          ).GetChatClient(deploymentName).AsIChatClient()
+        : new AzureOpenAIClient(
+            new Uri(endpoint),
+            new DefaultAzureCredential()
+          ).GetChatClient(deploymentName).AsIChatClient();
 
     return chatClient.AsAIAgent(new ChatClientAgentOptions
     {
-        Name = "CustomerServiceAgent",
+        Name = Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "CustomerServiceAgent",
         ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()),
         ChatOptions = new ChatOptions
         {
@@ -56,39 +75,15 @@ builder.Services.AddSingleton<AIAgent>(sp =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
-
-// POST /chat  — send a message to the customer agent
-app.MapPost("/chat", async (ChatRequest request, AIAgent agent, IMemoryCache cache, CancellationToken ct) =>
-{
-    var sessionId = request.SessionId ?? Guid.NewGuid().ToString();
-
-    if (!cache.TryGetValue(sessionId, out AgentSession? session) || session is null)
-    {
-        session = await agent.CreateSessionAsync(ct);
-        cache.Set(sessionId, session);
-    }
-
-    var reply = await agent.RunAsync(request.Message, session, cancellationToken: ct);
-
-    return Results.Ok(new ChatResponse(sessionId, reply.Text));
-});
-
-// DELETE /chat/{sessionId}  — clear a session
-app.MapDelete("/chat/{sessionId}", (string sessionId, IMemoryCache cache) =>
-{
-    cache.Remove(sessionId);
-    return Results.NoContent();
-});
+// Foundry Hosted Agent protocol endpoint'leri:
+//   POST /responses  — sohbet, streaming, multi-turn
+//   GET  /readiness  — platform health check
+app.MapResponsesServer();
 
 app.Run();
-
-record ChatRequest(string Message, string? SessionId);
-record ChatResponse(string SessionId, string Reply);
 
