@@ -11,9 +11,6 @@ namespace ResponsesAPIAgentViaCode
     {
         public async Task Create()
         {
-
-
-
             var ProjectEndpoint = Environment.GetEnvironmentVariable("Foundry_Project_Name");
 
 
