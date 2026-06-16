@@ -11,7 +11,7 @@ namespace PromptAgentViaCode
     {
         public void Create()
         {
-            var ProjectEndpoint = "https://education-test-resource.services.ai.azure.com/api/projects/education";
+            var ProjectEndpoint = Environment.GetEnvironmentVariable("Foundry_Project_Name");
             var AgentName = "PromptAgent";
 
             // Create project client to call Foundry API

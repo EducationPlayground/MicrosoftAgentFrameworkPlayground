@@ -12,7 +12,7 @@ namespace PromptAgentViaCode
     {
         public void Chat()
         {
-            var ProjectEndpoint = Environment.GetEnvironmentVariable("FoundryProjectName");
+            var ProjectEndpoint = Environment.GetEnvironmentVariable("Foundry_Project_Name");
             var AgentName = "PromptAgent";
 
             // Create project client to call Foundry API

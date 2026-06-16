@@ -11,7 +11,10 @@ namespace ResponsesAPIAgentViaCode
     {
         public async Task Create()
         {
-            var ProjectEndpoint = "https://education-test-resource.services.ai.azure.com/api/projects/education";
+
+
+
+            var ProjectEndpoint = Environment.GetEnvironmentVariable("Foundry_Project_Name");
 
 
             var deploymentName = "gpt-5-mini"; // supports all Foundry direct models
