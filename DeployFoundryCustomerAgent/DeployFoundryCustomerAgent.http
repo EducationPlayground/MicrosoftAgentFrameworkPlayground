@@ -1,6 +1,28 @@
-@DeployFoundryCustomerAgent_HostAddress = http://localhost:5017
+@DeployFoundryCustomerAgent_HostAddress = https://localhost:7041
 
-GET {{DeployFoundryCustomerAgent_HostAddress}}/weatherforecast/
-Accept: application/json
+### Start a new chat session
+POST {{DeployFoundryCustomerAgent_HostAddress}}/chat
+Content-Type: application/json
+
+{
+  "message": "Merhaba, laptop arıyorum. Öneriniz var mı?",
+  "sessionId": null
+}
+
+###
+
+### Continue existing session (replace SESSION_ID with the id from the previous response)
+POST {{DeployFoundryCustomerAgent_HostAddress}}/chat
+Content-Type: application/json
+
+{
+  "message": "Fiyat aralığı nedir?",
+  "sessionId": "SESSION_ID"
+}
+
+###
+
+### Delete a session
+DELETE {{DeployFoundryCustomerAgent_HostAddress}}/chat/SESSION_ID
 
 ###
