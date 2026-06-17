@@ -16,6 +16,13 @@ var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]
                      ?? throw new InvalidOperationException("MODEL_DEPLOYMENT_NAME is not configured.");
 
 var apiKey = builder.Configuration["APIKEY"];
+
+using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+var logger = loggerFactory.CreateLogger("Startup");
+logger.LogInformation("FOUNDRY_PROJECT_ENDPOINT: {Endpoint}", endpoint);
+logger.LogInformation("MODEL_DEPLOYMENT_NAME: {DeploymentName}", deploymentName);
+logger.LogInformation("APIKEY: {ApiKey}", string.IsNullOrEmpty(apiKey) ? "(null veya bos)" : apiKey);
+
 IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
     ? new AzureOpenAIClient(
         new Uri(endpoint),

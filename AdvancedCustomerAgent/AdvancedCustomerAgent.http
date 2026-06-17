@@ -58,7 +58,7 @@ Foundry-Features: HostedAgents=V1Preview
   "definition": {
     "kind": "hosted",
     "container_configuration": {
-      "image": "educationfoundry.azurecr.io/advancedcustomeragent:v5"
+      "image": "educationfoundry.azurecr.io/advancedcustomeragent:v6"
     },
     "cpu": "1",
     "memory": "2Gi",
@@ -109,37 +109,6 @@ Foundry-Features: HostedAgents=V1Preview
   "message": "Kablosuz Kulaklık fiyatı nedir?"
 }
 
-###
-
-### 8. [UPDATE] Yeni version deploy et (kod/config değişikliği sonrası)
-POST {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/versions?api-version={{Foundry_ApiVersion}}
-Authorization: Bearer {{Foundry_Token}}
-Content-Type: application/json
-Foundry-Features: HostedAgents=V1Preview
-
-{
-  "definition": {
-    "kind": "hosted",
-    "container_configuration": {
-      "image": "educationfoundry.azurecr.io/advancedcustomeragent:v5"
-    },
-    "cpu": "1",
-    "memory": "2Gi",
-    "protocol_versions": [
-      {
-        "protocol": "responses",
-        "version": "1.0.0"
-      }
-    ],
-    "environment_variables": {
-      "ASPNETCORE_ENVIRONMENT": "Production",
-      "ASPNETCORE_HTTP_PORTS": "8088",
-      "MODEL_DEPLOYMENT_NAME": "gpt-5-mini"
-    }
-  }
-}
-
-###
 
 ### 9. [CLEANUP] Belirli bir version'ı sil
 DELETE {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/versions/1?api-version={{Foundry_ApiVersion}}
