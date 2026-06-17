@@ -1,11 +1,11 @@
 services:
-  deployfoundrycustomeragent:
+  simpleCustomerAgent:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8088
     ports:
       - "7041:8088"
-  deployfounderycustomeragentviaemptyproject:
+  AdvancedCustomerAgent:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8088
