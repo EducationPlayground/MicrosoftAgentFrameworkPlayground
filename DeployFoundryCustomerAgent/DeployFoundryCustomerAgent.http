@@ -70,7 +70,9 @@ Foundry-Features: HostedAgents=V1Preview
       }
     ],
     "environment_variables": {
-      "MODEL_DEPLOYMENT_NAME": "${AZURE_AI_MODEL_DEPLOYMENT_NAME}"
+      "ASPNETCORE_ENVIRONMENT": "Production",
+      "ASPNETCORE_HTTP_PORTS": "8088",
+      "MODEL_DEPLOYMENT_NAME": "gpt-5-mini"
     }
   }
 }
@@ -131,7 +133,9 @@ Foundry-Features: HostedAgents=V1Preview
       }
     ],
     "environment_variables": {
-      "MODEL_DEPLOYMENT_NAME": "${AZURE_AI_MODEL_DEPLOYMENT_NAME}"
+      "ASPNETCORE_ENVIRONMENT": "Production",
+      "ASPNETCORE_HTTP_PORTS": "8088",
+      "MODEL_DEPLOYMENT_NAME": "gpt-5-mini"
     }
   }
 }
