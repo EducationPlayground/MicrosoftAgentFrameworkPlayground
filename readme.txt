@@ -7,4 +7,4 @@ docker-compose build deployfoundrycustomeragent
 az acr login --name educationfoundry
 
 3. Docker İmajını ACR'ye Gönderme:
-docker push educationfoundry.azurecr.io/deployfoundrycustomeragent:v2
+docker push educationfoundry.azurecr.io/deployfoundrycustomeragent:v3

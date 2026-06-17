@@ -1,3 +1,4 @@
+using Azure.AI.AgentServer.Responses;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DeployFoundryCustomerAgent.Protocol;

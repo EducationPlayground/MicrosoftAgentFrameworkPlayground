@@ -27,57 +27,87 @@ builder.Services.AddSingleton<AIAgent>(sp =>
     // Lokal geliştirmede appsettings.json veya user-secrets üzerinden set edilebilir.
     var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
 
-    var endpoint = builder.Configuration["FOUNDRY_PROJECT_ENDPOINT"]!;
-    logger.LogInformation("FOUNDRY_PROJECT_ENDPOINT: {Endpoint}", endpoint);
-
-    var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]!;
-    logger.LogInformation("MODEL_DEPLOYMENT_NAME: {DeploymentName}", deploymentName);
-
-    // Lokal geliştirmede ApiKey varsa kullan; Foundry'de managed identity (DefaultAzureCredential) devreye girer.
-    var apiKey = builder.Configuration["APIKEY"];
-    logger.LogInformation("APIKEY configured: {HasApiKey}", !string.IsNullOrEmpty(apiKey));
-    IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
-        ? new AzureOpenAIClient(
-            new Uri(endpoint),
-            new System.ClientModel.ApiKeyCredential(apiKey)
-          ).GetChatClient(deploymentName).AsIChatClient()
-        : new AzureOpenAIClient(
-            new Uri(endpoint),
-            new DefaultAzureCredential()
-          ).GetChatClient(deploymentName).AsIChatClient();
-
-    return chatClient.AsAIAgent(new ChatClientAgentOptions
+    try
     {
-        Name = Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "CustomerServiceAgent",
-        ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()),
-        ChatOptions = new ChatOptions
+        var endpoint = builder.Configuration["FOUNDRY_PROJECT_ENDPOINT"]!;
+        logger.LogInformation("FOUNDRY_PROJECT_ENDPOINT: {Endpoint}", endpoint);
+
+        var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]!;
+        logger.LogInformation("MODEL_DEPLOYMENT_NAME: {DeploymentName}", deploymentName);
+
+        // Lokal geliştirmede ApiKey varsa kullan; Foundry'de managed identity (DefaultAzureCredential) devreye girer.
+        var apiKey = builder.Configuration["APIKEY"];
+        logger.LogInformation("APIKEY configured: {HasApiKey}", !string.IsNullOrEmpty(apiKey));
+        IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
+            ? new AzureOpenAIClient(
+                new Uri(endpoint),
+                new System.ClientModel.ApiKeyCredential(apiKey)
+              ).GetChatClient(deploymentName).AsIChatClient()
+            : new AzureOpenAIClient(
+                new Uri(endpoint),
+                new DefaultAzureCredential()
+              ).GetChatClient(deploymentName).AsIChatClient();
+
+        return chatClient.AsAIAgent(new ChatClientAgentOptions
         {
-            Instructions = """
-                Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
-                ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
-                Kullanıcılara her zaman Türkçe yanıt ver.
-                Fiyat bilgisi verirken TL cinsinden belirt.
-                Stokta olmayan ürünler için özür dile ve alternatif öner.
-                Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
-                """,
-            Tools =
-            [
-                AIFunctionFactory.Create(tools.SearchProductsAsync),
-                AIFunctionFactory.Create(tools.GetProductByIdAsync),
-                AIFunctionFactory.Create(tools.GetProductsByCategoryAsync),
-                AIFunctionFactory.Create(tools.GetProductsByPriceRangeAsync),
-                AIFunctionFactory.Create(tools.GetOutOfStockProductsAsync),
-                AIFunctionFactory.Create(tools.GetInStockProductsAsync),
-                AIFunctionFactory.Create(tools.GetAllCategoriesAsync),
-            ]
-        }
-    });
+            Name = Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "CustomerServiceAgent",
+            ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()),
+            ChatOptions = new ChatOptions
+            {
+                Instructions = """
+                    Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
+                    ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
+                    Kullanıcılara her zaman Türkçe yanıt ver.
+                    Fiyat bilgisi verirken TL cinsinden belirt.
+                    Stokta olmayan ürünler için özür dile ve alternatif öner.
+                    Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
+                    """,
+                Tools =
+                [
+                    AIFunctionFactory.Create(tools.SearchProductsAsync),
+                    AIFunctionFactory.Create(tools.GetProductByIdAsync),
+                    AIFunctionFactory.Create(tools.GetProductsByCategoryAsync),
+                    AIFunctionFactory.Create(tools.GetProductsByPriceRangeAsync),
+                    AIFunctionFactory.Create(tools.GetOutOfStockProductsAsync),
+                    AIFunctionFactory.Create(tools.GetInStockProductsAsync),
+                    AIFunctionFactory.Create(tools.GetAllCategoriesAsync),
+                ]
+            }
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "AIAgent oluşturulurken hata meydana geldi.");
+        throw;
+    }
 });
 
 var app = builder.Build();
 
-// AIAgent singleton'ını startup'ta resolve et — loglar uygulama ayağa kalktığında yazılsın
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
 
+    var agent = services.GetRequiredService<AIAgent>();
+}
+
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (exceptionFeature?.Error is { } ex)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("GlobalExceptionHandler");
+            logger.LogError(ex, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
+        }
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync("{\"error\":\"Internal server error\"}");
+    });
+});
 
 if (app.Environment.IsDevelopment())
 {
