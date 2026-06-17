@@ -1,3 +1,4 @@
+using Azure.AI.AgentServer.Responses;
 using Azure.AI.OpenAI;
 using Azure.Identity;
 using DeployFoundryCustomerAgent.Agent;
@@ -7,16 +8,17 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.Services.AddAgentServerCore(); // request ID, server version, logging
+builder.Services.AddResponsesServer();
 builder.Services.AddOpenApi();
 builder.Services.AddMemoryCache();
 
 // Register in-memory product data store and tools
 builder.Services.AddSingleton<ProductDataStore>();
 builder.Services.AddSingleton<CustomerAgentTools>();
-
+builder.Services.AddScoped<ResponseHandler, CustomerAgentHandler>();
 // Register the ResponseHandler (Foundry Hosted Agent protocol)
-builder.Services.AddResponsesServer<CustomerAgentHandler>();
+//builder.Services.AddResponsesServer<CustomerAgentHandler>();
 
 // Register AIAgent — config env var'larından okunur (Foundry otomatik enjekte eder)
 builder.Services.AddSingleton<AIAgent>(sp =>
@@ -42,11 +44,11 @@ builder.Services.AddSingleton<AIAgent>(sp =>
             ? new AzureOpenAIClient(
                 new Uri(endpoint),
                 new System.ClientModel.ApiKeyCredential(apiKey)
-              ).GetChatClient(deploymentName).AsIChatClient()
+            ).GetChatClient(deploymentName).AsIChatClient()
             : new AzureOpenAIClient(
                 new Uri(endpoint),
                 new DefaultAzureCredential()
-              ).GetChatClient(deploymentName).AsIChatClient();
+            ).GetChatClient(deploymentName).AsIChatClient();
 
         return chatClient.AsAIAgent(new ChatClientAgentOptions
         {
@@ -55,13 +57,13 @@ builder.Services.AddSingleton<AIAgent>(sp =>
             ChatOptions = new ChatOptions
             {
                 Instructions = """
-                    Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
-                    ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
-                    Kullanıcılara her zaman Türkçe yanıt ver.
-                    Fiyat bilgisi verirken TL cinsinden belirt.
-                    Stokta olmayan ürünler için özür dile ve alternatif öner.
-                    Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
-                    """,
+                               Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
+                               ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
+                               Kullanıcılara her zaman Türkçe yanıt ver.
+                               Fiyat bilgisi verirken TL cinsinden belirt.
+                               Stokta olmayan ürünler için özür dile ve alternatif öner.
+                               Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
+                               """,
                 Tools =
                 [
                     AIFunctionFactory.Create(tools.SearchProductsAsync),
@@ -114,9 +116,11 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseAgentServerCore();
+app.MapResponsesServer();
 // Foundry Hosted Agent protocol endpoint'leri:
 //   POST /responses  — sohbet, streaming, multi-turn
 //   GET  /readiness  — platform health check
-app.MapResponsesServer();
+//pp.MapResponsesServer();
 app.Run();
 

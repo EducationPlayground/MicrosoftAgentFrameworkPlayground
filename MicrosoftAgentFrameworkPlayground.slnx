@@ -1,5 +1,5 @@
 <Solution>
-  <Project Path="../DeployCustomerAgentToFoundryClient/DeployCustomerAgentToFoundryClient.csproj" Id="8bce2350-3a2a-4cd1-b047-8ec456ef617d" />
+  <Project Path="../DeployFounderyCustomerAgentViaEmptyProject/DeployFounderyCustomerAgentViaEmptyProject.csproj" Id="50da9d4a-86be-4e56-98f6-f063edee9404" />
   <Project Path="DeployFoundryCustomerAgent/DeployFoundryCustomerAgent.csproj" Id="80a285c8-6b30-474c-9e74-a43763c61a4c" />
   <Project Path="docker-compose.dcproj">
     <Build />

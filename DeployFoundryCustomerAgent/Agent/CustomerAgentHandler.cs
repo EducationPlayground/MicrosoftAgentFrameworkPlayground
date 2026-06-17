@@ -1,6 +1,10 @@
+using Azure.AI.AgentServer.Responses;
+using Azure.AI.AgentServer.Responses.Models;
 using DeployFoundryCustomerAgent.Protocol;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Caching.Memory;
+using CreateResponseRequest = DeployFoundryCustomerAgent.Protocol.CreateResponseRequest;
+using ResponseContext = DeployFoundryCustomerAgent.Protocol.ResponseContext;
 
 namespace DeployFoundryCustomerAgent.Agent;
 
@@ -12,25 +16,30 @@ namespace DeployFoundryCustomerAgent.Agent;
 /// </summary>
 public class CustomerAgentHandler(AIAgent agent, IMemoryCache cache) : ResponseHandler
 {
-    public override async Task<ResponseResult> CreateAsync(
-        CreateResponseRequest request,
-        ResponseContext context,
-        CancellationToken cancellationToken)
+    public override IAsyncEnumerable<ResponseStreamEvent> CreateAsync(CreateResponse request,
+        Azure.AI.AgentServer.Responses.ResponseContext context, CancellationToken cancellationToken)
     {
-        var sessionId = context.SessionId ?? Guid.NewGuid().ToString();
+        //var sessionId = Guid.NewGuid().ToString();
 
-        // Aynı sessionId ile gelen isteklerde mevcut MAF oturumunu yeniden kullan (multi-turn)
-        if (!cache.TryGetValue(sessionId, out AgentSession? session) || session is null)
-        {
-            session = await agent.CreateSessionAsync(cancellationToken);
-            cache.Set(sessionId, session, TimeSpan.FromMinutes(30));
-        }
+        //// Aynı sessionId ile gelen isteklerde mevcut MAF oturumunu yeniden kullan (multi-turn)
+        //if (!cache.TryGetValue(sessionId, out AgentSession? session) || session is null)
+        //{
+        //    session = await agent.CreateSessionAsync(cancellationToken);
+        //    cache.Set(sessionId, session, TimeSpan.FromMinutes(30));
+        //}
 
-        var reply = await agent.RunAsync(
-            request.Input,
-            session,
-            cancellationToken: cancellationToken);
+        //var reply = await agent.RunAsync(
+        //    request.Input,
+        //    session,
+        //    cancellationToken: cancellationToken);
 
-        return new ResponseResult(sessionId, reply.Text ?? string.Empty);
+        //return new ResponseResult(sessionId, reply.Text ?? string.Empty);
+        //TEST: Basit echo yanıtı döndür
+        return new TextResponse(context, request,
+            createText: async ct =>
+            {
+                var input = await context.GetInputTextAsync(cancellationToken: ct);
+                return $"Echo: {input}";
+            });
     }
 }
