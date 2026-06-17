@@ -1,55 +1,32 @@
 ﻿
 using AdvancedCustomerAgent;
-using Azure.AI.OpenAI;
+using AdvancedCustomerAgent.Services;
+using Azure.AI.Projects;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
-using AdvancedCustomerAgent.Services;
 
 var builder = AgentHost.CreateBuilder(args);
 
-var endpoint = builder.Configuration["FOUNDRY_PROJECT_ENDPOINT"]
-               ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not configured.");
 
-var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]
-                     ?? throw new InvalidOperationException("MODEL_DEPLOYMENT_NAME is not configured.");
-
-var apiKey = builder.Configuration["APIKEY"];
-
-using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
-var logger = loggerFactory.CreateLogger("Startup");
-logger.LogInformation("FOUNDRY_PROJECT_ENDPOINT: {Endpoint}", endpoint);
-logger.LogInformation("MODEL_DEPLOYMENT_NAME: {DeploymentName}", deploymentName);
-logger.LogInformation("APIKEY: {ApiKey}", string.IsNullOrEmpty(apiKey) ? "(null veya bos)" : apiKey);
-
-IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
-    ? new AzureOpenAIClient(
-        new Uri(endpoint),
-        new System.ClientModel.ApiKeyCredential(apiKey)
-    ).GetChatClient(deploymentName).AsIChatClient()
-    : new AzureOpenAIClient(
-        new Uri(endpoint),
-        new DefaultAzureCredential()
-    ).GetChatClient(deploymentName).AsIChatClient();
+var projectEndpoint = new Uri("https://education-test-resource.services.ai.azure.com");
+var deployment = "gpt-5-mini";
 
 var tools = new CustomerAgentTools(new ProductDataStore());
+AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential())
+    .AsAIAgent(
+        model: deployment,
+        instructions: """"
+                      Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
+                      ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
+                      Kullanıcılara her zaman Türkçe yanıt ver.
+                      Fiyat bilgisi verirken TL cinsinden belirt.
+                      Stokta olmayan ürünler için özür dile ve alternatif öner.
+                      Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
 
-var agent = chatClient.AsAIAgent(new ChatClientAgentOptions
-{
-    Name = Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "CustomerServiceAgent",
-    ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()),
-    ChatOptions = new ChatOptions
-    {
-        Instructions = """
-                       Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
-                       ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
-                       Kullanıcılara her zaman Türkçe yanıt ver.
-                       Fiyat bilgisi verirken TL cinsinden belirt.
-                       Stokta olmayan ürünler için özür dile ve alternatif öner.
-                       Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
-                       """,
-        Tools =
+                      """",
+        name: "custer-agent", tools:
         [
             AIFunctionFactory.Create(tools.SearchProductsAsync),
             AIFunctionFactory.Create(tools.GetProductByIdAsync),
@@ -58,9 +35,45 @@ var agent = chatClient.AsAIAgent(new ChatClientAgentOptions
             AIFunctionFactory.Create(tools.GetOutOfStockProductsAsync),
             AIFunctionFactory.Create(tools.GetInStockProductsAsync),
             AIFunctionFactory.Create(tools.GetAllCategoriesAsync),
-        ]
-    }
-});
+        ]);
+
+//IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
+//    ? new AzureOpenAIClient(
+//        new Uri(endpoint),
+//        new System.ClientModel.ApiKeyCredential(apiKey)
+//    ).GetChatClient(deploymentName).AsIChatClient()
+//    : new AzureOpenAIClient(
+//        new Uri(endpoint),
+//        new DefaultAzureCredential()
+//    ).GetChatClient(deploymentName).AsIChatClient();
+
+
+//var agent = chatClient.AsAIAgent(new ChatClientAgentOptions
+//{
+//    Name = Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "CustomerServiceAgent",
+//    ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()),
+//    ChatOptions = new ChatOptions
+//    {
+//        Instructions = """
+//                       Sen bir e-ticaret müşteri hizmetleri asistanısın. Müşterilerin ürün sorularını yanıtlamak,
+//                       ürün aramalarına yardımcı olmak ve stok bilgisi vermek için tasarlandın.
+//                       Kullanıcılara her zaman Türkçe yanıt ver.
+//                       Fiyat bilgisi verirken TL cinsinden belirt.
+//                       Stokta olmayan ürünler için özür dile ve alternatif öner.
+//                       Yalnızca mağazamızdaki ürünler hakkında bilgi ver.
+//                       """,
+//        Tools =
+//        [
+//            AIFunctionFactory.Create(tools.SearchProductsAsync),
+//            AIFunctionFactory.Create(tools.GetProductByIdAsync),
+//            AIFunctionFactory.Create(tools.GetProductsByCategoryAsync),
+//            AIFunctionFactory.Create(tools.GetProductsByPriceRangeAsync),
+//            AIFunctionFactory.Create(tools.GetOutOfStockProductsAsync),
+//            AIFunctionFactory.Create(tools.GetInStockProductsAsync),
+//            AIFunctionFactory.Create(tools.GetAllCategoriesAsync),
+//        ]
+//    }
+//});
 
 builder.Services.AddFoundryResponses(agent);
 builder.RegisterProtocol("responses", endpoints => endpoints.MapFoundryResponses());

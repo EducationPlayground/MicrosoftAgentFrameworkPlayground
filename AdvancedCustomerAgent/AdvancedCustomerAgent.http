@@ -58,7 +58,7 @@ Foundry-Features: HostedAgents=V1Preview
   "definition": {
     "kind": "hosted",
     "container_configuration": {
-      "image": "educationfoundry.azurecr.io/advancedcustomeragent:v6"
+      "image": "educationfoundry.azurecr.io/advancedcustomeragent:v7"
     },
     "cpu": "1",
     "memory": "2Gi",

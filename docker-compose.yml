@@ -2,12 +2,12 @@ services:
 
 
   simpleCustomerAgent:
-    image: educationfoundry.azurecr.io/simplecustomeragent:v6
+    image: educationfoundry.azurecr.io/simplecustomeragent:v7
     build:
       context: .
       dockerfile: DeployFounderyCustomerAgentViaEmptyProject/Dockerfile
   AdvancedCustomerAgent:
-    image: educationfoundry.azurecr.io/advancedcustomeragent:v6
+    image: educationfoundry.azurecr.io/advancedcustomeragent:v7
     build:
       context: .
       dockerfile: AdvancedCustomerAgent/Dockerfile
