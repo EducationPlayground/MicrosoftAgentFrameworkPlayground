@@ -10,10 +10,10 @@ using AdvancedCustomerAgent.Services;
 var builder = AgentHost.CreateBuilder(args);
 
 var endpoint = builder.Configuration["FOUNDRY_PROJECT_ENDPOINT"]
-    ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not configured.");
+               ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not configured.");
 
 var deploymentName = builder.Configuration["MODEL_DEPLOYMENT_NAME"]
-    ?? throw new InvalidOperationException("MODEL_DEPLOYMENT_NAME is not configured.");
+                     ?? throw new InvalidOperationException("MODEL_DEPLOYMENT_NAME is not configured.");
 
 var apiKey = builder.Configuration["APIKEY"];
 IChatClient chatClient = !string.IsNullOrEmpty(apiKey)
