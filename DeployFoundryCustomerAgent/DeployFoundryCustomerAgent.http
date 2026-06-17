@@ -26,3 +26,128 @@ Content-Type: application/json
 GET {{DeployFoundryCustomerAgent_HostAddress}}/readiness
 
 ###
+
+
+# =============================================================================
+# FOUNDRY REST API — HOSTED AGENT DEPLOY
+# Kaynak: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/deploy-hosted-agent
+#
+# Kullanım:
+#   1. Aşağıdaki değişkenleri kendi ortamınıza göre doldurun.
+#   2. TOKEN almak için terminalde şunu çalıştırın:
+#      az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv
+# =============================================================================
+@Foundry_Account    = education-test-resource
+@Foundry_Project    = education
+@Foundry_BaseUrl    = https://{{Foundry_Account}}.services.ai.azure.com/api/projects/{{Foundry_Project}}
+@Foundry_ApiVersion = v1
+@Foundry_Token      = eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6IndoMDZzRWt6TEhKNXNOTmFVeVJZMl82TzhLMCIsImtpZCI6IndoMDZzRWt6TEhKNXNOTmFVeVJZMl82TzhLMCJ9.eyJhdWQiOiJodHRwczovL2FpLmF6dXJlLmNvbSIsImlzcyI6Imh0dHBzOi8vc3RzLndpbmRvd3MubmV0LzQzZDU2OWZmLWFlMGMtNDA0Zi05NDcwLWRmODgzZTZhYzY4ZC8iLCJpYXQiOjE3ODE2NTMzNjgsIm5iZiI6MTc4MTY1MzM2OCwiZXhwIjoxNzgxNjU4NzgwLCJhY3IiOiIxIiwiYWlvIjoiQWFRQVcvOGNBQUFBeGl6NitrSCtZam5LMGZEZ0NIMXJ2dFlWTCtwRE90VDlvUHpablpGN0FaWlVRa2Izam51Rkdlc09YWGtWT2UzZFFtSGtpQUxtYUVEZk5TU1kvUjJ3WWxXczB0SWxXcUpveHlQYXcwVTVQT0dYUU1yZ21LRG1sUXdnVjBkdTBjQlYyeFp0UkNqTyt3VTFQU3VIbWJ5ZDlubzNwQWtENE5YQndDWjZVOWNTVU5yaHY2ejVrMERuYUVxVVM2OVkyVjdrZnFhankwdTh1aWQ1VmhoOWFPWUhNQT09IiwiYWx0c2VjaWQiOiIxOmxpdmUuY29tOjAwMDNCRkZEMUFERTNFNTQiLCJhbXIiOlsicHdkIiwibWZhIl0sImFwcGlkIjoiMDRiMDc3OTUtOGRkYi00NjFhLWJiZWUtMDJmOWUxYmY3YjQ2IiwiYXBwaWRhY3IiOiIwIiwiZW1haWwiOiJmLWNha2lyb2dsdUBvdXRsb29rLmNvbSIsImZhbWlseV9uYW1lIjoiw4dha8Sxcm_En2x1IiwiZ2l2ZW5fbmFtZSI6IkZhdGloIiwiZ3JvdXBzIjpbIjdlYTU5NmU4LWY3NjEtNGQ3Ny04MDY2LTAyN2EwYjc0ZGZmNiIsImVkMDM2ODc4LTY0NjItNDg4Zi05NTFhLTZiY2E4ZjQ3OTNjNSIsIjkzYmRlZjAwLTM5NjktNGYzZi1hZDBmLTk2ZjFhNjc5NmExNiIsIjVmNGUwNTc5LTUwYmQtNGY0My04NWEyLTUzOGIwYWFiMWM5MSIsImU0ZmVjZDcxLTFhZWEtNDdlMC1iYzkzLTZlYzdmNDI4ZTY5NyIsIjAzN2MyMTQ3LTdjOTEtNGM4NC1iOTFkLTY1NTYwMjQ4NzI5MiIsIjM3Njk1ZjZiLTcyNjQtNDFhOS05MTIxLWE5OTgyNzQ4ODg0OSJdLCJpZHAiOiJsaXZlLmNvbSIsImlkdHlwIjoidXNlciIsImlwYWRkciI6Ijc4LjE2Mi43MC4yMjUiLCJuYW1lIjoiRmF0aWggw4dha8Sxcm_En2x1Iiwib2lkIjoiYzg3MjIwODctZWQzMC00NWU2LWEzYWYtZjdmYTE1YjdkMzJmIiwicHVpZCI6IjEwMDMyMDAwMzgzRjUyOTMiLCJyaCI6IjEuQVF3QV8yblZRd3l1VDBDVWNOLUlQbXJHalY5dnBoamYyeGRNbmRjV05IRXFuTDRBQUVnTUFBLiIsInNjcCI6InVzZXJfaW1wZXJzb25hdGlvbiIsInNpZCI6IjAwMmY1NTRhLTljYzItOWVlYy1jNGM0LTdhNzdiYThhZjAwMyIsInN1YiI6Ii1oRUwxbjl6a2dDR0VRSnRtUzdCYl9kc2E5TDdaNWVGNXcxZmF5ZXRVVzgiLCJ0aWQiOiI0M2Q1NjlmZi1hZTBjLTQwNGYtOTQ3MC1kZjg4M2U2YWM2OGQiLCJ1bmlxdWVfbmFtZSI6ImxpdmUuY29tI2YtY2FraXJvZ2x1QG91dGxvb2suY29tIiwidXRpIjoiQ3hyQk9ycHFKRXVvNk85UlhyQTVBQSIsInZlciI6IjEuMCIsInhtc19hY3RfZmN0IjoiNSAzIiwieG1zX2Z0ZCI6IldVYkt4MzA2TWJfVWtTdXRTalhnYXpHYnVabi14akNjTmI1SlBMdnVZNHdCWlhWeWIzQmxkMlZ6ZEMxa2MyMXoiLCJ4bXNfaWRyZWwiOiIxIDEwIiwieG1zX3N1Yl9mY3QiOiIzIDE0In0.X67bJo94oLv4-UB0f4DXducwIJVfn_WWyjkWBQFlU8HAsIacB3TW9pZrDQhfH_QZT-Z0B-_tEOnsKofytBMO3kD5Q2se4iOoXAe0gkuhp9PtPf7HqR8TICy-YrSPdikBO_YO8OPHrnSdUFe51IXD8wAOo3PHCbf5AYJWG0FsWxg38DIwny1c2ATkVBYNEKqo636v_7ajSnP_Xic4_O7i1MxEpovMnYXwXGYnSdPwoC5lr56MU-RtpGg9NS2wLRi2-ilj_OeKl1-oX_TeqVGjrbjqPW9CCiK6i-YKxfitUUq16oGXBMyTmABOxELBTe20XQOUQ7iwsgopnfQeTP0_Eg
+@Foundry_AgentName  = deployfoundrycustomeragent3
+
+###
+
+### 4. [DEPLOY] Agent oluştur (ilk deploy — version 1 oluşturulur)
+### agent.yaml içeriği JSON body'ye dönüştürülmüştür.
+POST {{Foundry_BaseUrl}}/agents?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Content-Type: application/json
+Foundry-Features: HostedAgents=V1Preview
+
+{
+  "name": "{{Foundry_AgentName}}",
+  "description": "E-ticaret müşteri hizmetleri asistanı (Microsoft Agent Framework, .NET 10).",
+  "definition": {
+    "kind": "hosted",
+    "container_configuration": {
+      "image": "educationfoundry.azurecr.io/deployfoundrycustomeragent:latest"
+    },
+    "cpu": "1",
+    "memory": "2Gi",
+    "protocol_versions": [
+      {
+        "protocol": "responses",
+        "version": "1.0.0"
+      }
+    ],
+    "environment_variables": {
+      "MODEL_DEPLOYMENT_NAME": "${AZURE_AI_MODEL_DEPLOYMENT_NAME}"
+    }
+  }
+}
+
+###
+
+### 5. [DEPLOY] Version durumunu sorgula — "active" olana kadar tekrarlayın
+### status: provisioning | active | failed | deleted
+GET {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/versions/1?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Foundry-Features: HostedAgents=V1Preview
+
+###
+
+### 6. [INVOKE] Agent'ı çağır — Responses protokolü (OpenAI uyumlu)
+POST {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/endpoint/protocols/openai/responses?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Content-Type: application/json
+Foundry-Features: HostedAgents=V1Preview
+
+{
+  "input": "Kablosuz Kulaklık fiyatı nedir?",
+  "store": false
+}
+
+###
+
+### 7. [INVOKE] Agent'ı çağır — Invocations protokolü (duplex / streaming)
+POST {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/endpoint/protocols/invocations?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Content-Type: application/json
+Foundry-Features: HostedAgents=V1Preview
+
+{
+  "message": "Kablosuz Kulaklık fiyatı nedir?"
+}
+
+###
+
+### 8. [UPDATE] Yeni version deploy et (kod/config değişikliği sonrası)
+POST {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/versions?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Content-Type: application/json
+Foundry-Features: HostedAgents=V1Preview
+
+{
+  "definition": {
+    "kind": "hosted",
+    "container_configuration": {
+      "image": "educationfoundry.azurecr.io/deployfoundrycustomeragent:v2"
+    },
+    "cpu": "1",
+    "memory": "2Gi",
+    "protocol_versions": [
+      {
+        "protocol": "responses",
+        "version": "1.0.0"
+      }
+    ],
+    "environment_variables": {
+      "MODEL_DEPLOYMENT_NAME": "${AZURE_AI_MODEL_DEPLOYMENT_NAME}"
+    }
+  }
+}
+
+###
+
+### 9. [CLEANUP] Belirli bir version'ı sil
+DELETE {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}/versions/1?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Foundry-Features: HostedAgents=V1Preview
+
+###
+
+### 10. [CLEANUP] Agent'ı tüm version'larıyla birlikte sil
+DELETE {{Foundry_BaseUrl}}/agents/{{Foundry_AgentName}}?api-version={{Foundry_ApiVersion}}
+Authorization: Bearer {{Foundry_Token}}
+Foundry-Features: HostedAgents=V1Preview
+
+###
