@@ -5,3 +5,9 @@ services:
       - ASPNETCORE_HTTP_PORTS=8088
     ports:
       - "7041:8088"
+  deployfounderycustomeragentviaemptyproject:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8088
+    ports:
+      - "7045:8088"

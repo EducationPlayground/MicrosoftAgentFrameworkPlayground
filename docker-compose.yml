@@ -4,3 +4,10 @@ services:
     build:
       context: .
       dockerfile: DeployFoundryCustomerAgent/Dockerfile
+
+  deployfounderycustomeragentviaemptyproject:
+    image: educationfoundry.azurecr.io/simpleagent:v1
+    build:
+      context: .
+      dockerfile: DeployFounderyCustomerAgentViaEmptyProject/Dockerfile
+
