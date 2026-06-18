@@ -13,7 +13,10 @@ AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential(
         instructions: "You are a professional and empathetic customer service agent.",
         name: "custer-agent");
 
+
 var builder = AgentHost.CreateBuilder(args);
+
+
 builder.Services.AddFoundryResponses(agent);
 builder.RegisterProtocol("responses", endpoints => endpoints.MapFoundryResponses());
 
