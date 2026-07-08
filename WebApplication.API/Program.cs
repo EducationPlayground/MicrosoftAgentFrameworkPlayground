@@ -1,4 +1,3 @@
-using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.AI;
 using MicrosoftAgentFrameworkPlayground.ServiceDefaults;
@@ -6,7 +5,6 @@ using OpenAI;
 using Scalar.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using WebApplication.API.Data;
-using WebApplication.API.Providers;
 using System.Text.Json;
 
 var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder(args);
@@ -36,29 +34,9 @@ var openAiKey = Environment.GetEnvironmentVariable("OPEN_AI_KEY")
 
 var openAiClient = new OpenAIClient(openAiKey);
 
-builder.Services.AddChatClient(openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient());
-builder.Services.AddSingleton<AIAgent>(sp =>
-    openAiClient
-        .GetChatClient("gpt-4o-mini")
-        .AsIChatClient()
-        .AsAIAgent(new ChatClientAgentOptions
-        {
-            Name = "BasicLinearChat",
-            ChatOptions = new ChatOptions
-            {
-                Instructions = "Sen bir e-ticaret müşteri hizmetleri asistanısın. Ürünler hakkındaki soruları cevaplamak için verilen tool'ları kullan. Bilmediğin bilgileri uydurma; tool sonuçlarına dayan. Kısa, kibar ve Türkçe yanıt ver.",
-                Tools = [ 
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().SearchProductsAsync),
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().GetProductByIdAsync),
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().GetProductsByCategoryAsync),
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().GetProductsByPriceRangeAsync),
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().GetOutOftStockProductsAsync),
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().GetInStockProductsAsync),
-                    AIFunctionFactory.Create(sp.GetRequiredService<WebApplication.API.Services.ProductTools>().GetAllCategoriesAsync)
-                ]
-            },
-            ChatHistoryProvider = new EfCoreChatHistoryProvider(sp)
-        }));
+builder.Services.AddChatClient(openAiClient.GetChatClient("gpt-4o-mini").AsIChatClient())
+    .UseFunctionInvocation().UseOpenTelemetry(sourceName: builder.Environment.ApplicationName);
+
 var app = builder.Build();
 
 // Migrate DB on startup

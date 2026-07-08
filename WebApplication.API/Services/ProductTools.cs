@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using System.ComponentModel;
 
 namespace WebApplication.API.Services;
@@ -6,11 +7,26 @@ namespace WebApplication.API.Services;
 public class ProductTools
 {
     private readonly IServiceProvider _serviceProvider;
+    private IList<AITool>? _tools;
 
     public ProductTools(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
     }
+
+    /// <summary>
+    /// AI functions exposing the product catalog operations to the chat client. Built once and reused.
+    /// </summary>
+    public IList<AITool> Tools => _tools ??=
+    [
+        AIFunctionFactory.Create(SearchProductsAsync),
+        AIFunctionFactory.Create(GetProductByIdAsync),
+        AIFunctionFactory.Create(GetProductsByCategoryAsync),
+        AIFunctionFactory.Create(GetProductsByPriceRangeAsync),
+        AIFunctionFactory.Create(GetOutOftStockProductsAsync),
+        AIFunctionFactory.Create(GetInStockProductsAsync),
+        AIFunctionFactory.Create(GetAllCategoriesAsync)
+    ];
 
     [Description("Belirli bir sorguyla eşleşen (Name, Description veya Category içinde arar) ürünleri arar")]
     public async Task<List<Data.Product>> SearchProductsAsync([Description("Aranacak kelime veya ifade")] string query)

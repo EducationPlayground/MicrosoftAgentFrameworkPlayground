@@ -1,111 +1,84 @@
-using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.AI;
 using System.Text.Json;
 using WebApplication.API.Data;
-using WebApplication.API.Providers;
+using WebApplication.API.Services;
 
 namespace WebApplication.API.Endpoints;
 
 public static class ChatEndpoints
 {
+    private const string Instructions =
+        "Sen bir e-ticaret müşteri hizmetleri asistanısın. Ürünler hakkındaki soruları cevaplamak için verilen tool'ları kullan. Bilmediğin bilgileri uydurma; tool sonuçlarına dayan. Kısa, kibar ve Türkçe yanıt ver.";
+
     public static void MapChatEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/chat");
 
-        group.MapGet("/history", async (AIAgent agent, HttpContext httpContext, CancellationToken cancellationToken) =>
+        group.MapGet("/history", async (IServiceProvider serviceProvider, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
-            var sessionJson = httpContext.Session.GetString("AgentSessionData");
-            if (string.IsNullOrEmpty(sessionJson))
-            {
-                return Results.Ok(new List<ChatMessageDto>());
-            }
+            await httpContext.Session.LoadAsync(cancellationToken);
+            var sessionId = httpContext.Session.Id;
 
-            var jsonElement = JsonSerializer.Deserialize<JsonElement>(sessionJson);
-            var session = await agent.DeserializeSessionAsync(jsonElement, cancellationToken: cancellationToken);
-
-            var stateInitializer = (AgentSession? s) => new EfCoreChatHistoryProvider.State();
-            var providerSessionState = new ProviderSessionState<EfCoreChatHistoryProvider.State>(stateInitializer, typeof(EfCoreChatHistoryProvider).Name);
-            var state = providerSessionState.GetOrInitializeState(session);
-
-            if (string.IsNullOrEmpty(state.DbKey))
-            {
-                return Results.Ok(new List<ChatMessageDto>());
-            }
-
-            using var scope = app.ServiceProvider.CreateScope();
+            using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var dbState = await dbContext.ChatSessionStates.FindAsync([state.DbKey], cancellationToken);
-            if (dbState != null)
+            var dbState = await dbContext.ChatSessionStates.FindAsync([sessionId], cancellationToken);
+            if (dbState is null)
             {
-                var chatMessages = JsonSerializer.Deserialize<List<JsonElement>>(dbState.MessagesJson);
-                if (chatMessages != null)
-                {
-                    var result = new List<ChatMessageDto>();
-                    foreach (var msg in chatMessages)
-                    {
-                        if (!msg.TryGetProperty("Role", out var roleProp)) continue;
-                        var role = roleProp.GetString() ?? "";
-                        if (!role.Equals("user", StringComparison.OrdinalIgnoreCase) && !role.Equals("assistant", StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        if (msg.TryGetProperty("Contents", out var contentsProp) && contentsProp.ValueKind == JsonValueKind.Array)
-                        {
-                            var contentText = "";
-                            foreach (var contentItem in contentsProp.EnumerateArray())
-                            {
-                                if (contentItem.TryGetProperty("$type", out var typeProp) && 
-                                    typeProp.GetString() == "text" && 
-                                    contentItem.TryGetProperty("Text", out var textProp))
-                                {
-                                    contentText += textProp.GetString() ?? "";
-                                }
-                            }
-
-                            if (!string.IsNullOrEmpty(contentText))
-                            {
-                                result.Add(new ChatMessageDto(role, contentText));
-                            }
-                        }
-                    }
-                    return Results.Ok(result);
-                }
+                return Results.Ok(new List<ChatMessageDto>());
             }
 
-            return Results.Ok(new List<ChatMessageDto>());
+            var messages = JsonSerializer.Deserialize<List<ChatMessage>>(dbState.MessagesJson, AIJsonUtilities.DefaultOptions) ?? [];
+            var result = messages
+                .Where(m => (m.Role == ChatRole.User || m.Role == ChatRole.Assistant) && !string.IsNullOrEmpty(m.Text))
+                .Select(m => new ChatMessageDto(m.Role.Value, m.Text))
+                .ToList();
+
+            return Results.Ok(result);
         });
 
         group.MapPost("", async Task<Results<Ok<ChatResponse>, BadRequest<string>>>
-            (ChatRequest request, AIAgent agent, HttpContext httpContext, CancellationToken cancellationToken) =>
+            (ChatRequest request, IChatClient chatClient, ProductTools productTools, IServiceProvider serviceProvider, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
             if (string.IsNullOrWhiteSpace(request.Message))
             {
                 return TypedResults.BadRequest("message is required.");
             }
 
+            // Force session cookie creation so subsequent requests (and the Razor Pages client) align to the same session.
             httpContext.Session.SetString("Init", "true");
+            var sessionId = httpContext.Session.Id;
 
-            var sessionJson = httpContext.Session.GetString("AgentSessionData");
-            AgentSession session;
+            using var scope = serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            if (string.IsNullOrEmpty(sessionJson))
+            var dbState = await dbContext.ChatSessionStates.FindAsync([sessionId], cancellationToken);
+            List<ChatMessage> history = dbState is not null
+                ? JsonSerializer.Deserialize<List<ChatMessage>>(dbState.MessagesJson, AIJsonUtilities.DefaultOptions) ?? []
+                : [];
+
+            history.Add(new ChatMessage(ChatRole.User, request.Message));
+
+            var chatOptions = new ChatOptions
             {
-                session = await agent.CreateSessionAsync(cancellationToken);
-            }
-            else
+                Instructions = Instructions,
+                Tools = productTools.Tools
+            };
+
+            var response = await chatClient.GetResponseAsync(history, chatOptions, cancellationToken);
+
+            history.AddMessages(response);
+
+            if (dbState is null)
             {
-                var jsonElement = JsonSerializer.Deserialize<JsonElement>(sessionJson);
-                session = await agent.DeserializeSessionAsync(jsonElement, cancellationToken: cancellationToken);
+                dbState = new ChatSessionState { SessionId = sessionId };
+                dbContext.ChatSessionStates.Add(dbState);
             }
 
-            var response = await agent.RunAsync(request.Message, session, cancellationToken: cancellationToken);
+            dbState.MessagesJson = JsonSerializer.Serialize(history, AIJsonUtilities.DefaultOptions);
+            await dbContext.SaveChangesAsync(cancellationToken);
 
-            var updatedSessionJsonElement = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-            httpContext.Session.SetString("AgentSessionData", updatedSessionJsonElement.GetRawText());
-
-            return TypedResults.Ok(new ChatResponse(httpContext.Session.Id, response.Text));
+            return TypedResults.Ok(new ChatResponse(sessionId, response.Text));
         });
     }
 }
