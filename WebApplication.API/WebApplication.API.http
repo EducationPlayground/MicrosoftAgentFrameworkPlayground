@@ -1,42 +1,28 @@
 @WebApplicationAPI_HostAddress = http://localhost:5191
 
-### Upload Document
-POST {{WebApplicationAPI_HostAddress}}/api/documents/upload
-Content-Type: multipart/form-data; boundary=----FormBoundary
-
-------FormBoundary
-Content-Disposition: form-data; name="file"; filename="sample.pdf"
-Content-Type: application/pdf
-
-< ./sample.pdf
-------FormBoundary--
-
-### List All Documents
-GET {{WebApplicationAPI_HostAddress}}/api/documents
-Accept: application/json
-
-### Document Details
-GET {{WebApplicationAPI_HostAddress}}/api/documents/1
-Accept: application/json
-
-### Ask Question (All Documents)
-POST {{WebApplicationAPI_HostAddress}}/api/chat/ask
+### Classify a positive comment
+POST {{WebApplicationAPI_HostAddress}}/sentiment
 Content-Type: application/json
 
 {
-  "question": "What is the subject of these documents?"
+  "comment": "Bu ürünü çok beğendim, harika bir deneyimdi."
 }
 
-### Ask Question (Specific Document)
-POST {{WebApplicationAPI_HostAddress}}/api/chat/ask
+### Classify a negative comment
+POST {{WebApplicationAPI_HostAddress}}/sentiment
 Content-Type: application/json
 
 {
-  "question": "What is the main subject of this document?",
-  "documentId": 1
+  "comment": "Çok kötü bir deneyimdi, hiç memnun kalmadım."
 }
 
-### Delete Document
-DELETE {{WebApplicationAPI_HostAddress}}/api/documents/1
+### Classify a neutral comment
+POST {{WebApplicationAPI_HostAddress}}/sentiment
+Content-Type: application/json
+
+{
+  "comment": "Ürün açıklandığı gibi geldi, standart bir deneyimdi."
+}
 
 ###
+

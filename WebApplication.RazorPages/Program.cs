@@ -7,12 +7,6 @@ builder.AddServiceDefaults();
 // Add services to the container.
 builder.Services.AddRazorPages();
 
-builder.Services.AddHttpClient("ChatApi", client =>
-{
-    client.BaseAddress = new Uri("http://webapplication-api");
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
-
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
