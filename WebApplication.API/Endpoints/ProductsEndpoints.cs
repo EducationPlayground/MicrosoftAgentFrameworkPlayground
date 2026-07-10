@@ -98,12 +98,7 @@ public static class ProductsEndpoints
                 .Where(p => p.Embedding != null)
                 .OrderBy(p => EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector))
                 .Take(20)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Name,
-                    Distance = EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector)
-                })
+                .Select(p => new { p.Id, p.Name })
                 .ToListAsync();
 
             // 3. Keyword search — lexical ranking by number of matching keywords
@@ -115,34 +110,27 @@ public static class ProductsEndpoints
                 .ToListAsync();
 
             var keywordResults = keywordCandidates
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Name,
-                    MatchCount = keywords.Count(kw =>
-                        p.Name.Contains(kw, StringComparison.OrdinalIgnoreCase))
-                })
-                .OrderByDescending(p => p.MatchCount)
+                .OrderByDescending(p => keywords.Count(kw =>
+                    p.Name.Contains(kw, StringComparison.OrdinalIgnoreCase)))
                 .Take(20)
                 .ToList();
 
             // 4. Reciprocal Rank Fusion (RRF, k=60)
             const double k = 60.0;
-            var fused = new Dictionary<int, (string Name, double Score, double? Distance, int? MatchCount)>();
+            var fused = new Dictionary<int, (string Name, double Score)>();
 
-            for (var i = 0; i < vectorResults.Count; i++)
+            void Fuse(List<(int Id, string Name)> ranked)
             {
-                var r = vectorResults[i];
-                var prev = fused.GetValueOrDefault(r.Id);
-                fused[r.Id] = (r.Name, prev.Score + 1.0 / (k + i + 1), r.Distance, prev.MatchCount);
+                for (var i = 0; i < ranked.Count; i++)
+                {
+                    var (id, name) = ranked[i];
+                    var prev = fused.GetValueOrDefault(id);
+                    fused[id] = (name, prev.Score + 1.0 / (k + i + 1));
+                }
             }
 
-            for (var i = 0; i < keywordResults.Count; i++)
-            {
-                var r = keywordResults[i];
-                var prev = fused.GetValueOrDefault(r.Id);
-                fused[r.Id] = (r.Name, prev.Score + 1.0 / (k + i + 1), prev.Distance, r.MatchCount);
-            }
+            Fuse(vectorResults.Select(r => (r.Id, r.Name)).ToList());
+            Fuse(keywordResults.Select(r => (r.Id, r.Name)).ToList());
 
             var results = fused
                 .OrderByDescending(kv => kv.Value.Score)
@@ -152,9 +140,7 @@ public static class ProductsEndpoints
                     Rank = index + 1,
                     Id = kv.Key,
                     kv.Value.Name,
-                    RrfScore = kv.Value.Score,
-                    VectorDistance = kv.Value.Distance,
-                    KeywordMatchCount = kv.Value.MatchCount
+                    RrfScore = kv.Value.Score
                 })
                 .ToList();
 
