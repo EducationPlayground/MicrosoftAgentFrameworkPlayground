@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hybrid Search in .NET with SQL Server: Combining Vector and Keyword Search Using RRF</title>
+</head>
+<body>
+
+<h1>Hybrid Search in .NET with SQL Server: Combining Vector and Keyword Search Using Reciprocal Rank Fusion (RRF)</h1>
+
+<p>
+    Modern search experiences demand more than simple keyword matching. Users expect a search box to understand
+    <em>meaning</em> ("wireless audio device" should find "Bluetooth Headphones") while still respecting
+    <em>exact terms</em> ("USB-C 65W" should match precisely). Neither vector search nor keyword search alone
+    solves both problems well. <strong>Hybrid search</strong> combines them &mdash; and
+    <strong>Reciprocal Rank Fusion (RRF)</strong> is the industry-standard algorithm for merging the two result sets.
+</p>
+
+<p>
+    In this article we will build a complete, fully working hybrid search endpoint using:
+</p>
+
+<ul>
+    <li><strong>.NET 10</strong> Minimal APIs</li>
+    <li><strong>Entity Framework Core</strong> with the native SQL Server <code>vector</code> type</li>
+    <li><strong>SQL Server Full-Text Search</strong> (<code>CONTAINSTABLE</code>) for keyword ranking</li>
+    <li><strong>Microsoft.Extensions.AI</strong> (<code>IEmbeddingGenerator</code>) for generating embeddings</li>
+    <li><strong>Reciprocal Rank Fusion</strong> to merge both rankings into a single result list</li>
+</ul>
+
+<hr>
+
+<h2>How Hybrid Search Works</h2>
+
+<ol>
+    <li><strong>Vector search</strong> &mdash; converts the query into an embedding and ranks products by cosine distance (semantic similarity).</li>
+    <li><strong>Keyword search</strong> &mdash; uses SQL Server Full-Text Search to rank products by lexical relevance.</li>
+    <li><strong>Fusion</strong> &mdash; merges both ranked lists with the RRF formula:</li>
+</ol>
+
+<pre><code>RRF(d) = &Sigma; 1 / (k + rank(d))     where k = 60</code></pre>
+
+<p>
+    A document appearing near the top of <em>both</em> lists accumulates a high combined score,
+    while a document ranked highly in only one list still gets a fair chance to surface.
+</p>
+
+<hr>
+
+<h2>Step 1: Enable and Verify SQL Server Full-Text Search</h2>
+
+<p>
+    Keyword ranking relies on SQL Server's Full-Text Search feature. Before writing any application code,
+    make sure the feature is installed on your SQL Server instance:
+</p>
+
+<pre><code>SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled') AS IsFullTextInstalled;</code></pre>
+
+<p>
+    A result of <code>1</code> means Full-Text Search is installed. If it returns <code>0</code>,
+    re-run the SQL Server installer and add the <em>Full-Text and Semantic Extractions for Search</em> feature.
+</p>
+
+<h2>Step 2: Find the Primary Key Index of the Products Table</h2>
+
+<p>
+    A full-text index requires a unique, single-column, non-nullable key index &mdash; typically the primary key.
+    Find its name first:
+</p>
+
+<pre><code>SELECT name FROM sys.indexes
+WHERE object_id = OBJECT_ID('dbo.Products') AND is_primary_key = 1;</code></pre>
+
+<p>
+    In our example the primary key index is named <code>PK_Products</code>. Note this name &mdash;
+    you will need it in Step 4.
+</p>
+
+<h2>Step 3: Create a Full-Text Catalog</h2>
+
+<p>
+    A full-text catalog is a logical container for full-text indexes. Create one and mark it as the default:
+</p>
+
+<pre><code>CREATE FULLTEXT CATALOG ProductCatalog AS DEFAULT;</code></pre>
+
+<h2>Step 4: Create the Full-Text Index on the Products Table</h2>
+
+<p>
+    Now create the full-text index on the <code>Name</code> column. The <code>LANGUAGE</code> option controls
+    word breaking and stemming &mdash; use <code>1033</code> for English (or <code>1055</code> for Turkish
+    if your product names are in Turkish):
+</p>
+
+<pre><code>CREATE FULLTEXT INDEX ON dbo.Products
+(
+    Name LANGUAGE 1033    -- 1033 = English, 1055 = Turkish
+)
+KEY INDEX PK_Products
+ON ProductCatalog
+WITH CHANGE_TRACKING AUTO;
+GO</code></pre>
+
+<p>
+    <code>CHANGE_TRACKING AUTO</code> keeps the index up to date automatically whenever rows are inserted,
+    updated, or deleted.
+</p>
+
+<h2>Step 5: Verify the Index Population Status</h2>
+
+<p>
+    Full-text index population runs asynchronously. Check whether it has finished:
+</p>
+
+<pre><code>SELECT OBJECTPROPERTYEX(OBJECT_ID('dbo.Products'), 'TableFullTextPopulateStatus');
+-- 0 = population completed</code></pre>
+
+<h2>Step 6: Test Full-Text Search Directly in SQL</h2>
+
+<p>Exact word match:</p>
+
+<pre><code>SELECT Id, Name
+FROM dbo.Products
+WHERE CONTAINS(Name, N'"Bluetooth"');</code></pre>
+
+<p>Prefix (wildcard) match:</p>
+
+<pre><code>SELECT Id, Name
+FROM dbo.Products
+WHERE CONTAINS(Name, N'"B*"');</code></pre>
+
+<p>
+    Ranked results with <code>CONTAINSTABLE</code> &mdash; this is exactly what our application will use,
+    because it returns a relevance <code>RANK</code> we can sort by:
+</p>
+
+<pre><code>SELECT p.Id, p.Name, ft.RANK
+FROM CONTAINSTABLE(dbo.Products, Name, N'"Bluetooth"') ft
+JOIN dbo.Products p ON p.Id = ft.[KEY]
+ORDER BY ft.RANK DESC;</code></pre>
+
+<hr>
+
+<h2>Step 7: The Product Entity and Seeding Embeddings</h2>
+
+<p>
+    Each product stores its name and an embedding vector generated by an AI model. The
+    <code>SqlVector&lt;float&gt;</code> type maps directly to SQL Server's native <code>vector</code> column type.
+    The seed endpoint generates an embedding for every sample product and persists it:
+</p>
+
+<pre><code>// POST /products/seed &mdash; seeds sample products with their embeddings
+group.MapPost("/seed", async (
+    AppDbContext dbContext,
+    IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt; embeddingGenerator) =&gt;
+{
+    if (await dbContext.Products.AnyAsync())
+        return Results.Ok("Products already seeded.");
+
+    var products = new List&lt;Product&gt;();
+
+    foreach (var name in SampleProducts)
+    {
+        var result = await embeddingGenerator.GenerateAsync([name]);
+        products.Add(new Product
+        {
+            Name = name,
+            Embedding = new SqlVector&lt;float&gt;(result[0].Vector)
+        });
+    }
+
+    dbContext.Products.AddRange(products);
+    await dbContext.SaveChangesAsync();
+
+    return Results.Ok($"{products.Count} products seeded.");
+})
+.WithSummary("Seeds sample products with their embeddings");</code></pre>
+
+<h2>Step 8: Pure Vector Search (For Comparison)</h2>
+
+<p>
+    Before combining approaches, here is the plain semantic search endpoint. It embeds the query
+    and orders products by cosine distance using <code>EF.Functions.VectorDistance</code>:
+</p>
+
+<pre><code>// GET /products/search?q=... &mdash; semantic search
+group.MapGet("/search", async (
+    string q,
+    AppDbContext dbContext,
+    IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt; embeddingGenerator) =&gt;
+{
+    var queryResult = await embeddingGenerator.GenerateAsync([q]);
+    var queryVector = new SqlVector&lt;float&gt;(queryResult[0].Vector);
+
+    var results = await dbContext.Products
+        .Where(p =&gt; p.Embedding != null)
+        .OrderBy(p =&gt; EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector))
+        .Take(5)
+        .Select(p =&gt; new
+        {
+            p.Id,
+            p.Name,
+            Distance = EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector)
+        })
+        .ToListAsync();
+
+    return Results.Ok(results);
+})
+.WithSummary("Performs semantic search over product names");</code></pre>
+
+<h2>Step 9: The Hybrid Search Endpoint</h2>
+
+<p>The hybrid endpoint performs four sub-steps:</p>
+
+<ol>
+    <li>Generate the query embedding.</li>
+    <li>Run vector search &mdash; take the top 20 by cosine distance.</li>
+    <li>Run keyword search &mdash; take the top 20 by <code>CONTAINSTABLE</code> rank.</li>
+    <li>Fuse both ranked lists with RRF and return the top 5.</li>
+</ol>
+
+<h3>9.1 Generate the Query Embedding and Run Vector Search</h3>
+
+<pre><code>// GET /products/hybrid-search?q=... &mdash; hybrid search (vector + keyword, RRF)
+group.MapGet("/hybrid-search", async (
+    string q,
+    AppDbContext dbContext,
+    IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt; embeddingGenerator) =&gt;
+{
+    // 1. Generate query embedding
+    var queryResult = await embeddingGenerator.GenerateAsync([q]);
+    var queryVector = new SqlVector&lt;float&gt;(queryResult[0].Vector);
+
+    // 2. Vector search &mdash; semantic ranking by cosine distance
+    var vectorResults = await dbContext.Products
+        .Where(p =&gt; p.Embedding != null)
+        .OrderBy(p =&gt; EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector))
+        .Take(20)
+        .Select(p =&gt; new { p.Id, p.Name })
+        .ToListAsync();</code></pre>
+
+<h3>9.2 Keyword Search with CONTAINSTABLE</h3>
+
+<p>
+    The keyword leg uses a parameterized raw SQL query through <code>SqlQuery&lt;T&gt;</code>.
+    EF Core turns the interpolated <code>{q}</code> into a SQL parameter, keeping the query safe
+    from SQL injection:
+</p>
+
+<pre><code>    // 3. Keyword search &mdash; lexical ranking via full-text search, most relevant first
+    var rankedKeywordResults = await dbContext.Database
+        .SqlQuery&lt;KeywordSearchResult&gt;($"""
+            SELECT TOP (20) p.[Id], p.[Name], kt.[RANK] AS [Rank]
+            FROM [Products] AS p
+            INNER JOIN CONTAINSTABLE([Products], [Name], {q}) AS kt ON p.[Id] = kt.[KEY]
+            ORDER BY kt.[RANK] DESC
+            """)
+        .ToListAsync();
+
+    var keywordResults = rankedKeywordResults
+        .Select(r =&gt; new { r.Id, r.Name })
+        .ToList();</code></pre>
+
+<p>The result of the raw SQL query is mapped through a small record:</p>
+
+<pre><code>// Maps the result of the CONTAINSTABLE full-text search query used in keyword ranking
+private sealed record KeywordSearchResult(int Id, string Name, int Rank);</code></pre>
+
+<h3>9.3 Reciprocal Rank Fusion</h3>
+
+<p>
+    Both lists are already ordered by relevance, so the loop index <code>i</code> corresponds to the rank
+    (0-based, hence <code>i + 1</code> to make it 1-based). Products appearing in both lists have their
+    scores summed via <code>GetValueOrDefault</code>:
+</p>
+
+<pre><code>    // 4. Reciprocal Rank Fusion (RRF, k=60)
+    const double k = 60.0;
+    var scores = new Dictionary&lt;int, double&gt;();
+
+    for (var i = 0; i &lt; vectorResults.Count; i++)
+        scores[vectorResults[i].Id] = scores.GetValueOrDefault(vectorResults[i].Id) + 1.0 / (k + i + 1);
+
+    for (var i = 0; i &lt; keywordResults.Count; i++)
+        scores[keywordResults[i].Id] = scores.GetValueOrDefault(keywordResults[i].Id) + 1.0 / (k + i + 1);
+
+    var nameMap = vectorResults.Concat(keywordResults)
+        .GroupBy(r =&gt; r.Id)
+        .ToDictionary(g =&gt; g.Key, g =&gt; g.First().Name);
+
+    var results = scores
+        .Select(kv =&gt; new { Id = kv.Key, Name = nameMap[kv.Key], RrfScore = kv.Value })
+        .OrderByDescending(r =&gt; r.RrfScore)
+        .Take(5)
+        .ToList();
+
+    return Results.Ok(results);
+})
+.WithSummary("Performs hybrid search combining vector similarity and keyword matching using RRF");</code></pre>
+
+<h3>Why k = 60?</h3>
+
+<p>
+    The constant <code>k = 60</code> comes from the original RRF research paper and is used by most
+    search engines (including Azure AI Search and Elasticsearch). It dampens the influence of very high
+    ranks so that a document ranked #1 in one list does not completely dominate documents that are
+    consistently ranked #3&ndash;#5 across both lists.
+</p>
+
+<hr>
+
+<h2>Step 10: Try It Out</h2>
+
+<ol>
+    <li>Seed the database:
+        <pre><code>POST /products/seed</code></pre>
+    </li>
+    <li>Run a pure semantic search:
+        <pre><code>GET /products/search?q=wireless audio device</code></pre>
+    </li>
+    <li>Run the hybrid search:
+        <pre><code>GET /products/hybrid-search?q=bluetooth headphones</code></pre>
+    </li>
+</ol>
+
+<p>Example hybrid search response:</p>
+
+<pre><code>[
+  { "id": 1,  "name": "Wireless Bluetooth Headphones",  "rrfScore": 0.03252 },
+  { "id": 5,  "name": "Bluetooth Neckband Earphones",   "rrfScore": 0.03175 },
+  { "id": 2,  "name": "Noise Cancelling Earbuds",       "rrfScore": 0.01587 },
+  { "id": 3,  "name": "Over-Ear Studio Headphones",     "rrfScore": 0.01562 },
+  { "id": 14, "name": "Mini Bluetooth Keyboard",        "rrfScore": 0.01538 }
+]</code></pre>
+
+<p>
+    Notice how "Wireless Bluetooth Headphones" ranks first: it scores highly in <em>both</em> the semantic
+    list (it means "bluetooth headphones") and the keyword list (it literally contains both words), so its
+    RRF contributions add up.
+</p>
+
+<hr>
+
+<h2>Summary</h2>
+
+<ul>
+    <li>Enable and verify <strong>SQL Server Full-Text Search</strong>, then create a catalog and a full-text index on the <code>Name</code> column.</li>
+    <li>Store product embeddings in SQL Server's native <code>vector</code> column using <code>SqlVector&lt;float&gt;</code>.</li>
+    <li>Run <strong>vector search</strong> with <code>EF.Functions.VectorDistance</code> and <strong>keyword search</strong> with <code>CONTAINSTABLE</code>, each returning a top-20 ranked list.</li>
+    <li>Merge both lists with <strong>Reciprocal Rank Fusion (k = 60)</strong> and return the top results.</li>
+</ul>
+
+<p>
+    Hybrid search gives you the best of both worlds: semantic understanding for natural-language queries
+    and lexical precision for exact terms &mdash; all inside SQL Server, without any external search engine.
+</p>
+
+<hr>
+
+<h2>Appendix: Complete Hybrid Search Endpoint Code</h2>
+
+<p>
+    Here is the finished, fully working hybrid search endpoint in one piece, ready to copy into your project:
+</p>
+
+<pre><code>using Microsoft.Data.SqlTypes;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using WebApplication.API.Data;
+
+namespace WebApplication.API.Endpoints;
+
+public static class ProductsEndpoints
+{
+    public static void MapProductEndpoints(this WebApplication app)
+    {
+        var group = app.MapGroup("/products").WithTags("Products");
+
+        // GET /products/hybrid-search?q=... &mdash; hybrid search (vector + keyword, RRF)
+        group.MapGet("/hybrid-search", async (
+            string q,
+            AppDbContext dbContext,
+            IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt; embeddingGenerator) =&gt;
+        {
+            // 1. Generate query embedding
+            var queryResult = await embeddingGenerator.GenerateAsync([q]);
+            var queryVector = new SqlVector&lt;float&gt;(queryResult[0].Vector);
+
+            // 2. Vector search &mdash; semantic ranking by cosine distance
+            var vectorResults = await dbContext.Products
+                .Where(p =&gt; p.Embedding != null)
+                .OrderBy(p =&gt; EF.Functions.VectorDistance("cosine", p.Embedding!.Value, queryVector))
+                .Take(20)
+                .Select(p =&gt; new { p.Id, p.Name })
+                .ToListAsync();
+
+            // 3. Keyword search &mdash; lexical ranking using SQL Server full-text search
+            //    (CONTAINSTABLE), most relevant first
+            var rankedKeywordResults = await dbContext.Database
+                .SqlQuery&lt;KeywordSearchResult&gt;($"""
+                    SELECT TOP (20) p.[Id], p.[Name], kt.[RANK] AS [Rank]
+                    FROM [Products] AS p
+                    INNER JOIN CONTAINSTABLE([Products], [Name], {q}) AS kt ON p.[Id] = kt.[KEY]
+                    ORDER BY kt.[RANK] DESC
+                    """)
+                .ToListAsync();
+
+            var keywordResults = rankedKeywordResults
+                .Select(r =&gt; new { r.Id, r.Name })
+                .ToList();
+
+            // 4. Reciprocal Rank Fusion (RRF, k=60)
+            const double k = 60.0;
+            var scores = new Dictionary&lt;int, double&gt;();
+
+            for (var i = 0; i &lt; vectorResults.Count; i++)
+                scores[vectorResults[i].Id] = scores.GetValueOrDefault(vectorResults[i].Id) + 1.0 / (k + i + 1);
+
+            for (var i = 0; i &lt; keywordResults.Count; i++)
+                scores[keywordResults[i].Id] = scores.GetValueOrDefault(keywordResults[i].Id) + 1.0 / (k + i + 1);
+
+            var nameMap = vectorResults.Concat(keywordResults)
+                .GroupBy(r =&gt; r.Id)
+                .ToDictionary(g =&gt; g.Key, g =&gt; g.First().Name);
+
+            var results = scores
+                .Select(kv =&gt; new { Id = kv.Key, Name = nameMap[kv.Key], RrfScore = kv.Value })
+                .OrderByDescending(r =&gt; r.RrfScore)
+                .Take(5)
+                .ToList();
+
+            return Results.Ok(results);
+        })
+        .WithSummary("Performs hybrid search combining vector similarity and keyword matching using RRF");
+    }
+
+    // Maps the result of the CONTAINSTABLE full-text search query used in keyword ranking
+    private sealed record KeywordSearchResult(int Id, string Name, int Rank);
+}</code></pre>
+
+</body>
+</html>
