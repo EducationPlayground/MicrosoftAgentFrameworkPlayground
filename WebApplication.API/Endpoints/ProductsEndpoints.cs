@@ -162,6 +162,17 @@ public static class ProductsEndpoints
                 .Select(r => new { r.Id, r.Name })
                 .ToList();
 
+
+            /*
+            •	k = 60.0 (resimdeki sabit)
+               •	i döngü indeksi 0'dan başladığı için i + 1 gerçek "rank" değerine karşılık geliyor (1., 2., 3. sıra...)
+               •	Yani k + i + 1 = rank + k, formülle aynı.
+               •	GetValueOrDefault ile aynı ürün her iki listede de varsa skorlar toplanıyor (Σ), bu da "Sum scores per document" adımını doğru şekilde uyguluyor.
+               •	Son olarak scores dictionary'sinde her ürün için toplam skor hesaplanmış oluyor ve büyükten küçüğe sıralanıp ilk 5 alınıyor.
+               Yani mantık ve matematik doğru, resimdeki RRF formülünü tam olarak uyguluyor. Tek dikkat edilmesi gereken nokta i sıfırdan başladığı için kod içinde i + 1 ekleyerek 1-tabanlı rank'e çeviriyor — bu doğru bir yaklaşım.
+
+
+            */
             // 4. Reciprocal Rank Fusion (RRF, k=60)
             const double k = 60.0;
             var scores = new Dictionary<int, double>();
