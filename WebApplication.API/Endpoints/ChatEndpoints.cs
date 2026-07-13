@@ -15,10 +15,12 @@ public static class ChatEndpoints
     {
         var group = app.MapGroup("/chat");
 
-        group.MapGet("/history", async (IServiceProvider serviceProvider, HttpContext httpContext, CancellationToken cancellationToken) =>
+        group.MapGet("/history", async (string? conversationId, IServiceProvider serviceProvider, CancellationToken cancellationToken) =>
         {
-            await httpContext.Session.LoadAsync(cancellationToken);
-            var conversationId = httpContext.Session.Id;
+            if (string.IsNullOrWhiteSpace(conversationId))
+            {
+                return Results.Ok(new List<ChatMessageDto>());
+            }
 
             using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -38,16 +40,16 @@ public static class ChatEndpoints
         });
 
         group.MapPost("", async Task<Results<Ok<ChatResponse>, BadRequest<string>>>
-            (ChatRequest request, IChatClient chatClient, ProductTools productTools, IServiceProvider serviceProvider, HttpContext httpContext, CancellationToken cancellationToken) =>
+            (ChatRequest request, IChatClient chatClient, ProductTools productTools, IServiceProvider serviceProvider, CancellationToken cancellationToken) =>
         {
             if (string.IsNullOrWhiteSpace(request.Message))
             {
                 return TypedResults.BadRequest("message is required.");
             }
 
-            // Force session cookie creation so subsequent requests (and the Razor Pages client) align to the same session.
-            httpContext.Session.SetString("Init", "true");
-            var conversationId = httpContext.Session.Id;
+            var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+                ? Guid.NewGuid().ToString()
+                : request.ConversationId;
 
             using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -83,6 +85,6 @@ public static class ChatEndpoints
     }
 }
 
-public sealed record ChatRequest(string Message);
+public sealed record ChatRequest(string Message, string? ConversationId = null);
 public sealed record ChatResponse(string ConversationId, string Reply);
 public sealed record ChatMessageDto(string Role, string Content);

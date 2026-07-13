@@ -5,6 +5,8 @@ namespace WebApplication.RazorPages.Pages
 {
     public class IndexModel : PageModel
     {
+        private const string ConversationIdCookieName = "ConversationId";
+
         private readonly IHttpClientFactory _httpClientFactory;
 
         public IndexModel(IHttpClientFactory httpClientFactory)
@@ -18,16 +20,14 @@ namespace WebApplication.RazorPages.Pages
         {
             try
             {
-                var client = _httpClientFactory.CreateClient("ChatApi");
-
-                // Cookie'leri aktarıyoruz ki API bizim tarayıcı session id'mizle eşleşsin
-                var requestMessage = new HttpRequestMessage(HttpMethod.Get, "/chat/history");
-                if (Request.Headers.TryGetValue("Cookie", out var cookieHeader))
+                var conversationId = Request.Cookies[ConversationIdCookieName];
+                if (string.IsNullOrWhiteSpace(conversationId))
                 {
-                    requestMessage.Headers.Add("Cookie", cookieHeader.ToString());
+                    return;
                 }
 
-                var response = await client.SendAsync(requestMessage, cancellationToken);
+                var client = _httpClientFactory.CreateClient("ChatApi");
+                var response = await client.GetAsync($"/chat/history?conversationId={Uri.EscapeDataString(conversationId)}", cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
                     var history = await response.Content.ReadFromJsonAsync<List<ChatMessageDto>>(cancellationToken: cancellationToken);
@@ -52,17 +52,9 @@ namespace WebApplication.RazorPages.Pages
 
             var client = _httpClientFactory.CreateClient("ChatApi");
 
-            // Cookie'leri aktarıyoruz ki API bizim tarayıcı session id'mizle eşleşsin
-            var requestMessage = new HttpRequestMessage(HttpMethod.Post, "/chat")
-            {
-                Content = JsonContent.Create(new { Message = request.Message })
-            };
-            if (Request.Headers.TryGetValue("Cookie", out var cookieHeader))
-            {
-                requestMessage.Headers.Add("Cookie", cookieHeader.ToString());
-            }
+            var conversationId = Request.Cookies[ConversationIdCookieName];
 
-            using var response = await client.SendAsync(requestMessage, cancellationToken);
+            using var response = await client.PostAsJsonAsync("/chat", new ChatRequest(request.Message, conversationId), cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -76,19 +68,18 @@ namespace WebApplication.RazorPages.Pages
                 return StatusCode(502, new { error = "Invalid response from chat API." });
             }
 
-            // API tarafında oluşturulan session cookie'sini (eğer ilk defa set edildiyse) tarayıcıya geri set etmeliyiz
-            if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+            // İlk mesajdan sonra dönen conversationId'yi tarayıcıya cookie olarak kaydediyoruz.
+            Response.Cookies.Append(ConversationIdCookieName, chatResponse.ConversationId, new CookieOptions
             {
-                foreach (var cookie in setCookies)
-                {
-                    Response.Headers.Append("Set-Cookie", cookie);
-                }
-            }
+                HttpOnly = true,
+                IsEssential = true,
+                Expires = DateTimeOffset.UtcNow.AddDays(30)
+            });
 
             return new JsonResult(chatResponse);
         }
 
-        public sealed record ChatRequest(string Message);
+        public sealed record ChatRequest(string Message, string? ConversationId = null);
         public sealed record ChatResponse(string ConversationId, string Reply);
         public sealed record ChatMessageDto(string Role, string Content);
     }
