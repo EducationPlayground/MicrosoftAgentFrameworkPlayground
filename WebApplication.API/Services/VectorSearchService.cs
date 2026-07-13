@@ -6,15 +6,6 @@ namespace WebApplication.API.Services;
 
 public class VectorSearchService(AppDbContext db)
 {
-    public async Task SaveChunkWithEmbeddingAsync(int chunkId, float[] embedding)
-    {
-        var sqlVector = new SqlVector<float>(embedding);
-
-        await db.DocumentChunks
-            .Where(c => c.Id == chunkId)
-            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Embedding, sqlVector));
-    }
-
     public async Task<List<ChunkSearchResult>> SearchSimilarChunksAsync(float[] queryEmbedding, int topN = 5, int? documentId = null)
     {
         var sqlVector = new SqlVector<float>(queryEmbedding);

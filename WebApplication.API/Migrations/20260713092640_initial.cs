@@ -35,11 +35,11 @@ namespace WebApplication.API.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    DocumentId = table.Column<int>(type: "int", nullable: false),
                     ChunkIndex = table.Column<int>(type: "int", nullable: false),
                     Content = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     PageNumber = table.Column<int>(type: "int", nullable: false),
-                    Embedding = table.Column<SqlVector<float>>(type: "vector(1536)", nullable: true)
+                    Embedding = table.Column<SqlVector<float>>(type: "vector(1536)", nullable: true),
+                    DocumentId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {

@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlTypes;
 using Microsoft.EntityFrameworkCore;
 using WebApplication.API.Data;
 using WebApplication.API.Data.Entities;
@@ -23,7 +24,6 @@ public static class DocumentEndpoints
         AppDbContext db,
         PdfProcessingService pdfService,
         EmbeddingService embeddingService,
-        VectorSearchService vectorSearchService,
         IWebHostEnvironment env)
     {
         if (file.Length == 0 || !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
@@ -66,26 +66,22 @@ public static class DocumentEndpoints
         db.Documents.Add(document);
         await db.SaveChangesAsync();
 
-        // Save chunks to database
-        var chunkEntities = chunks.Select((c, i) => new DocumentChunk
+        // Generate embeddings, then save chunks with embeddings in a single batch
+        var texts = chunks.Select(c => c.Content).ToList();
+        var embeddings = await embeddingService.GetEmbeddingsAsync(texts);
+
+
+        var chunkEntities = chunks.Select((chunk, chunkIndex) => new DocumentChunk
         {
             DocumentId = document.Id,
-            ChunkIndex = i,
-            Content = c.Content,
-            PageNumber = c.PageNumber
+            ChunkIndex = chunkIndex,
+            Content = chunk.Content,
+            PageNumber = chunk.PageNumber,
+            Embedding = new SqlVector<float>(embeddings[chunkIndex])
         }).ToList();
 
         db.DocumentChunks.AddRange(chunkEntities);
         await db.SaveChangesAsync();
-
-        // Generate embeddings and save vectors
-        var texts = chunkEntities.Select(c => c.Content).ToList();
-        var embeddings = await embeddingService.GetEmbeddingsAsync(texts);
-
-        for (var i = 0; i < chunkEntities.Count; i++)
-        {
-            await vectorSearchService.SaveChunkWithEmbeddingAsync(chunkEntities[i].Id, embeddings[i]);
-        }
 
         return Results.Created($"/api/documents/{document.Id}",
             new UploadDocumentResponse(

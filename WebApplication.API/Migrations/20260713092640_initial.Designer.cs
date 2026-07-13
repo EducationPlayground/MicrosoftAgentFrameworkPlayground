@@ -13,15 +13,15 @@ using WebApplication.API.Data;
 namespace WebApplication.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260421143102_initial2")]
-    partial class initial2
+    [Migration("20260713092640_initial")]
+    partial class initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.7")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
