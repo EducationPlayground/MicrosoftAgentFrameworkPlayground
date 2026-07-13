@@ -18,11 +18,11 @@ public static class ChatEndpoints
         group.MapGet("/history", async (IServiceProvider serviceProvider, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
             await httpContext.Session.LoadAsync(cancellationToken);
-            var sessionId = httpContext.Session.Id;
+            var conversationId = httpContext.Session.Id;
 
             using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var dbState = await dbContext.ChatSessionStates.FindAsync([sessionId], cancellationToken);
+            var dbState = await dbContext.ChatSessionStates.FindAsync([conversationId], cancellationToken);
             if (dbState is null)
             {
                 return Results.Ok(new List<ChatMessageDto>());
@@ -47,12 +47,12 @@ public static class ChatEndpoints
 
             // Force session cookie creation so subsequent requests (and the Razor Pages client) align to the same session.
             httpContext.Session.SetString("Init", "true");
-            var sessionId = httpContext.Session.Id;
+            var conversationId = httpContext.Session.Id;
 
             using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var dbState = await dbContext.ChatSessionStates.FindAsync([sessionId], cancellationToken);
+            var dbState = await dbContext.ChatSessionStates.FindAsync([conversationId], cancellationToken);
             List<ChatMessage> history = dbState is not null
                 ? JsonSerializer.Deserialize<List<ChatMessage>>(dbState.MessagesJson, AIJsonUtilities.DefaultOptions) ?? []
                 : [];
@@ -71,18 +71,18 @@ public static class ChatEndpoints
 
             if (dbState is null)
             {
-                dbState = new ChatSessionState { SessionId = sessionId };
+                dbState = new ChatSessionState { ConversationId = conversationId };
                 dbContext.ChatSessionStates.Add(dbState);
             }
 
             dbState.MessagesJson = JsonSerializer.Serialize(history, AIJsonUtilities.DefaultOptions);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            return TypedResults.Ok(new ChatResponse(sessionId, response.Text));
+            return TypedResults.Ok(new ChatResponse(conversationId, response.Text));
         });
     }
 }
 
 public sealed record ChatRequest(string Message);
-public sealed record ChatResponse(string SessionId, string Reply);
+public sealed record ChatResponse(string ConversationId, string Reply);
 public sealed record ChatMessageDto(string Role, string Content);

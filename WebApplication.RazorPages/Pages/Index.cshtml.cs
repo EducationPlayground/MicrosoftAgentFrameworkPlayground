@@ -89,7 +89,7 @@ namespace WebApplication.RazorPages.Pages
         }
 
         public sealed record ChatRequest(string Message);
-        public sealed record ChatResponse(string SessionId, string Reply);
+        public sealed record ChatResponse(string ConversationId, string Reply);
         public sealed record ChatMessageDto(string Role, string Content);
     }
 }
