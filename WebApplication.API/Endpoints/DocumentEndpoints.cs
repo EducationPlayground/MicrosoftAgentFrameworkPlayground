@@ -47,7 +47,7 @@ public static class DocumentEndpoints
 
         await using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
         {
-            (pageCount, chunks) = pdfService.ExtractChunks(stream);
+            (pageCount, chunks) = await pdfService.ExtractChunksAsync(stream);
         }
 
         if (chunks.Count == 0)
