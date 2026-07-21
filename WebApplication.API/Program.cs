@@ -14,6 +14,7 @@ builder.AddServiceDefaults();
 // OpenAPI
 builder.Services.AddOpenApi();
 
+// Conversation session'ları istekler arasında bellekte tutmak için.
 builder.Services.AddMemoryCache();
 
 // Database
@@ -37,7 +38,12 @@ builder.Services.AddSingleton<AIAgent>(_ =>
             {
                 Instructions = "You are a helpful assistant. Keep replies short and clear."
             },
-            ChatHistoryProvider = new InMemoryChatHistoryProvider()
+            ChatHistoryProvider = new InMemoryChatHistoryProvider(new InMemoryChatHistoryProviderOptions()
+            {
+#pragma warning disable MEAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+                ChatReducer = new MessageCountingChatReducer(5)
+#pragma warning restore MEAI001
+            })
         }));
 var app = builder.Build();
 
@@ -80,9 +86,33 @@ app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>>
     return TypedResults.Ok(new ChatResponse(conversationId, response.Text));
 });
 
+// Belirli bir conversation'ın chat history'sini döndürür.
+app.MapGet("/chat/{conversationId}/history", Results<Ok<IReadOnlyList<ChatMessageDto>>, NotFound<string>>
+    (string conversationId, AIAgent agent, IMemoryCache cache) =>
+{
+    // 1. Session cache'de yoksa bu conversation için geçmiş de yok demektir.
+    if (!cache.TryGetValue<AgentSession>(conversationId, out var session) || session is null)
+    {
+        return TypedResults.NotFound($"No conversation found for id '{conversationId}'.");
+    }
+
+    // 2. Agent'a bağlı InMemoryChatHistoryProvider üzerinden session'daki mesajları oku.
+    var provider = agent.GetService<InMemoryChatHistoryProvider>();
+    var messages = provider?.GetMessages(session) ?? [];
+
+    // 3. Sadece rol + metin bilgisini dışarıya aç.
+    var history = messages
+        .Select(m => new ChatMessageDto(m.Role.Value, m.Text))
+        .ToArray();
+
+    return TypedResults.Ok<IReadOnlyList<ChatMessageDto>>(history);
+});
+
 
 app.Run();
 
 public sealed record ChatRequest(string Message, string? ConversationId = null);
 
 public sealed record ChatResponse(string ConversationId, string Reply);
+
+public sealed record ChatMessageDto(string Role, string Text);
