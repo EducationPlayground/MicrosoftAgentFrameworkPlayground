@@ -9,7 +9,7 @@ namespace WebApplication.API.Providers;
 public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
 {
     /// <summary>
-    /// Tracks the per-session <see cref="State"/> (containing the database session id),
+    /// Tracks the per-session <see cref="State"/> (containing the conversation id),
     /// used to load and persist that session's state across invocations.
     /// </summary>
     private readonly ProviderSessionState<State> _sessionState;
@@ -17,16 +17,25 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
 
     public EfCoreChatHistoryProvider(
         IServiceProvider serviceProvider,
-        Func<AgentSession?, State>? stateInitializer = null,
         string? stateKey = null)
     {
         _serviceProvider = serviceProvider;
         _sessionState = new ProviderSessionState<State>(
-            stateInitializer ?? (_ => new State { SessionId = Guid.NewGuid().ToString() }),
+            _ => new State
+            {
+                ConversationId = ResolveConversationId() ?? Guid.NewGuid().ToString()
+            },
             stateKey ?? this.GetType().Name);
     }
 
-    public string StateKey => this._sessionState.StateKey;
+    /// <summary>
+    /// Resolves the active conversation id from the current HTTP request's scoped
+    /// <see cref="ConversationContext"/>, if available.
+    /// </summary>
+    private string? ResolveConversationId() =>
+        _serviceProvider.GetService<IHttpContextAccessor>()?.HttpContext?
+            .RequestServices.GetService<ConversationContext>()?.ConversationId;
+
 
     /// <summary>
     /// Retrieves the chat history for the current session from the database, so it can be
@@ -41,8 +50,8 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
         // Scope to access EF Core DbContext
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ChatHistoryDbContext>();
-        
-        var dbState = await dbContext.ChatSessionStates.FindAsync([state.SessionId], cancellationToken);
+
+        var dbState = await dbContext.ChatSessionStates.FindAsync([state.ConversationId], cancellationToken);
         if (dbState != null)
         {
             var messages = JsonSerializer.Deserialize<List<ChatMessage>>(dbState.MessagesJson);
@@ -64,8 +73,8 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
         
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ChatHistoryDbContext>();
-        
-        var dbState = await dbContext.ChatSessionStates.FindAsync([state.SessionId], cancellationToken);
+
+        var dbState = await dbContext.ChatSessionStates.FindAsync([state.ConversationId], cancellationToken);
 
         List<ChatMessage> existingMessages = new();
         if (dbState != null)
@@ -74,7 +83,7 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
         }
         else
         {
-            dbState = new ChatSessionState { SessionId = state.SessionId };
+            dbState = new ChatSessionState { ConversationId = state.ConversationId };
             dbContext.ChatSessionStates.Add(dbState);
         }
 
@@ -89,6 +98,6 @@ public sealed class EfCoreChatHistoryProvider : ChatHistoryProvider
 
     public sealed class State
     {
-        public string SessionId { get; set; } = string.Empty;
+        public string ConversationId { get; set; } = string.Empty;
     }
 }
