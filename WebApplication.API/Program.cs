@@ -87,4 +87,4 @@ app.Run();
 
 public sealed record ChatRequest(string Message, string? ConversationId = null);
 
-public sealed record ChatResponse(string SessionId, string Reply);
+public sealed record ChatResponse(string ConversationId, string Reply);
