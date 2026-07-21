@@ -5,6 +5,7 @@ using MicrosoftAgentFrameworkPlayground.ServiceDefaults;
 using OpenAI;
 using Scalar.AspNetCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using WebApplication.API.Data;
 using WebApplication.API.Providers;
 
@@ -16,12 +17,6 @@ builder.AddServiceDefaults();
 builder.Services.AddOpenApi();
 
 builder.Services.AddDistributedMemoryCache();
-builder.Services.AddSession(options =>
-{
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
 
 // Database
 builder.Services.AddDbContext<ChatHistoryDbContext>(options =>
@@ -50,8 +45,6 @@ builder.Services.AddSingleton<AIAgent>(sp =>
         }));
 var app = builder.Build();
 
-app.UseSession();
-
 app.MapDefaultEndpoints();
 
 app.MapScalarApiReference();
@@ -63,46 +56,55 @@ if (app.Environment.IsDevelopment())
 
 // Map endpoints
 app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>>
-    (ChatRequest request, AIAgent agent, HttpContext httpContext, CancellationToken cancellationToken) =>
+    (ChatRequest request, AIAgent agent, Microsoft.Extensions.Caching.Distributed.IDistributedCache cache, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Message))
     {
         return TypedResults.BadRequest("message is required.");
     }
 
-    // Session'ın başlatılmasını (cookie set edilmesini) garantilemek için geçici bir değer atıyoruz.
-    httpContext.Session.SetString("Init", "true");
+    // 1. Client bir conversationId gönderdiyse onu kullan, göndermediyse yeni bir tane oluştur.
+    var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+        ? Guid.NewGuid().ToString()
+        : request.ConversationId;
+    var cacheKey = $"AgentSessionData:{conversationId}";
 
-    // 1. Session id'yi client'tan değil, API tarafındaki entegre sunucu session mekanizmasından alıyoruz.
-    // 1. Client'ın önceki isteğinde kaydettiğimiz session verisini ASP.NET Session'dan okuyoruz
-    var sessionJson = httpContext.Session.GetString("AgentSessionData");
+    // 2. Bu conversationId'ye ait daha önce kaydedilmiş agent session verisini cache'den okuyoruz.
+    var sessionJson = await cache.GetStringAsync(cacheKey, cancellationToken);
     AgentSession session;
 
     if (string.IsNullOrEmpty(sessionJson))
     {
-        // 2. İlk defa geliyorsa yeni session oluşturuyoruz
+        // 3. İlk defa geliyorsa yeni session oluşturuyoruz.
         session = await agent.CreateSessionAsync(cancellationToken);
     }
     else
     {
-        // 3. Daha önceden gelmişse, onu JSON'dan tekrar yüklüyoruz.
+        // 4. Daha önceden gelmişse, onu JSON'dan tekrar yüklüyoruz.
         var jsonElement = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(sessionJson);
         session = await agent.DeserializeSessionAsync(jsonElement, cancellationToken: cancellationToken);
     }
 
-    // 4. Agent'ı bu objeyle çalıştır
+    // 5. Agent'ı bu objeyle çalıştır
     var response = await agent.RunAsync(request.Message, session, cancellationToken: cancellationToken);
 
-    // 5. Güncellenmiş session durumunu (chat history dahil) tekrar ASP.NET Session'a yaz
+    // 6. Güncellenmiş session durumunu (chat history dahil) tekrar cache'e conversationId ile yaz.
     var updatedSessionJsonElement = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-    httpContext.Session.SetString("AgentSessionData", updatedSessionJsonElement.GetRawText());
+    await cache.SetStringAsync(
+        cacheKey,
+        updatedSessionJsonElement.GetRawText(),
+        new Microsoft.Extensions.Caching.Distributed.DistributedCacheEntryOptions
+        {
+            SlidingExpiration = TimeSpan.FromMinutes(30)
+        },
+        cancellationToken);
 
-    return TypedResults.Ok(new ChatResponse(httpContext.Session.Id, response.Text));
+    return TypedResults.Ok(new ChatResponse(conversationId, response.Text));
 });
 
 
 app.Run();
 
-public sealed record ChatRequest(string Message);
+public sealed record ChatRequest(string Message, string? ConversationId = null);
 
 public sealed record ChatResponse(string SessionId, string Reply);
