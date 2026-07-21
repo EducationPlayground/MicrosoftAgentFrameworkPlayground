@@ -1,6 +1,7 @@
 using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Caching.Memory;
 using MicrosoftAgentFrameworkPlayground.ServiceDefaults;
 using OpenAI;
 using Scalar.AspNetCore;
@@ -13,13 +14,7 @@ builder.AddServiceDefaults();
 // OpenAPI
 builder.Services.AddOpenApi();
 
-builder.Services.AddDistributedMemoryCache();
-builder.Services.AddSession(options =>
-{
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
+builder.Services.AddMemoryCache();
 
 // Database
 
@@ -46,8 +41,6 @@ builder.Services.AddSingleton<AIAgent>(_ =>
         }));
 var app = builder.Build();
 
-app.UseSession();
-
 app.MapDefaultEndpoints();
 
 app.MapScalarApiReference();
@@ -59,46 +52,37 @@ if (app.Environment.IsDevelopment())
 
 // Map endpoints
 app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>>
-    (ChatRequest request, AIAgent agent, HttpContext httpContext, CancellationToken cancellationToken) =>
+    (ChatRequest request, AIAgent agent, IMemoryCache cache, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Message))
     {
         return TypedResults.BadRequest("message is required.");
     }
 
-    // Session'ın başlatılmasını (cookie set edilmesini) garantilemek için geçici bir değer atıyoruz.
-    httpContext.Session.SetString("Init", "true");
+    // 1. Conversation id'yi client bize gönderdiyse onu kullanıyoruz, gönderilmediyse yeni bir tane üretiyoruz.
+    var conversationId = string.IsNullOrWhiteSpace(request.ConversationId)
+        ? Guid.NewGuid().ToString("N")
+        : request.ConversationId;
 
-    // 1. Session id'yi client'tan değil, API tarafındaki entegre sunucu session mekanizmasından alıyoruz.
-    // 1. Client'ın önceki isteğinde kaydettiğimiz session verisini ASP.NET Session'dan okuyoruz
-    var sessionJson = httpContext.Session.GetString("AgentSessionData");
-    AgentSession session;
-
-    if (string.IsNullOrEmpty(sessionJson))
+    // 2. Daha önce bu conversation id için kaydettiğimiz session'ı cache'den okuyoruz.
+    if (!cache.TryGetValue<AgentSession>(conversationId, out var session) || session is null)
     {
-        // 2. İlk defa geliyorsa yeni session oluşturuyoruz
+        // 3. İlk defa geliyorsa yeni session oluşturuyoruz
         session = await agent.CreateSessionAsync(cancellationToken);
-    }
-    else
-    {
-        // 3. Daha önceden gelmişse, onu JSON'dan tekrar yüklüyoruz.
-        var jsonElement = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(sessionJson);
-        session = await agent.DeserializeSessionAsync(jsonElement, cancellationToken: cancellationToken);
     }
 
     // 4. Agent'ı bu objeyle çalıştır
     var response = await agent.RunAsync(request.Message, session, cancellationToken: cancellationToken);
 
-    // 5. Güncellenmiş session durumunu (chat history dahil) tekrar ASP.NET Session'a yaz
-    var updatedSessionJsonElement = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-    httpContext.Session.SetString("AgentSessionData", updatedSessionJsonElement.GetRawText());
+    // 5. Session'ı (chat history dahil) tekrar cache'e yaz
+    cache.Set(conversationId, session, TimeSpan.FromMinutes(30));
 
-    return TypedResults.Ok(new ChatResponse(httpContext.Session.Id, response.Text));
+    return TypedResults.Ok(new ChatResponse(conversationId, response.Text));
 });
 
 
 app.Run();
 
-public sealed record ChatRequest(string Message);
+public sealed record ChatRequest(string Message, string? ConversationId = null);
 
-public sealed record ChatResponse(string SessionId, string Reply);
+public sealed record ChatResponse(string ConversationId, string Reply);
