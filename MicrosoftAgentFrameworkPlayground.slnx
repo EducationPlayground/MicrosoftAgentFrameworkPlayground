@@ -5,5 +5,4 @@
     <Project Path="HarnessDemo/HarnessDemo.BlazorClient/HarnessDemo.BlazorClient.csproj" />
     <Project Path="HarnessDemo/HarnessDemo.ServiceDefaults/HarnessDemo.ServiceDefaults.csproj" />
   </Folder>
-  <Project Path="WebApplication.API/WebApplication.API.csproj" />
 </Solution>
