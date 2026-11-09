@@ -1,0 +1,50 @@
+@page "/compare"
+@rendermode InteractiveServer
+
+<PageTitle>Yan yana</PageTitle>
+
+<div class="compare">
+    <div class="compare-bar">
+        <div class="samples">
+            @foreach (var sample in Samples.All)
+            {
+                <button class="chip" title="@sample.Prompt" @onclick="() => SendBothAsync(sample.Prompt)">@sample.Label</button>
+            }
+        </div>
+        <form class="composer" @onsubmit="SubmitAsync">
+            <input @bind="_input" @bind:event="oninput" placeholder="Aynı mesajı iki agent'a da gönder…" />
+            <button class="primary" type="submit" disabled="@string.IsNullOrWhiteSpace(_input)">İkisine gönder</button>
+            <button class="ghost" type="button" @onclick="ResetBoth">Yeni thread</button>
+        </form>
+    </div>
+
+    <div class="compare-grid">
+        <ChatView @ref="_agent" Endpoint="agent" Title="Normal agent" ShowInput="false" Compact="true" />
+        <ChatView @ref="_harness" Endpoint="harness" Title="Harness agent" ShowInput="false" Compact="true" />
+    </div>
+</div>
+
+@code {
+    private ChatView? _agent;
+    private ChatView? _harness;
+    private string _input = "";
+
+    private Task SendBothAsync(string text) =>
+        Task.WhenAll(_agent!.SendAsync(text), _harness!.SendAsync(text));
+
+    private async Task SubmitAsync()
+    {
+        var text = _input.Trim();
+        _input = "";
+        if (text.Length > 0)
+        {
+            await SendBothAsync(text);
+        }
+    }
+
+    private void ResetBoth()
+    {
+        _agent?.Reset();
+        _harness?.Reset();
+    }
+}

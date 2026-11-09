@@ -1,0 +1,264 @@
+@implements IDisposable
+@inject AgUiClient Client
+
+<div class="chat-shell @(IsHarness ? "is-harness" : "is-agent") @(Compact ? "compact" : "")">
+    <section class="chat">
+        <header class="chat-header">
+            <div>
+                <span class="kind-badge">@(IsHarness ? "Harness Agent" : "Agent")</span>
+                <h2>@Title</h2>
+                <p class="muted">POST /@_chat.Endpoint · thread @_chat.ThreadId[..8]</p>
+            </div>
+            <div class="stats">
+                <div><strong>@_chat.RunCount</strong><span>run</span></div>
+                <div><strong>@_chat.ToolCallCount</strong><span>araç çağrısı</span></div>
+                <button class="ghost" @onclick="Reset" disabled="@_chat.IsRunning">Yeni thread</button>
+            </div>
+        </header>
+
+        <div class="messages">
+            @if (_chat.Items.Count == 0)
+            {
+                <p class="empty">Bir örnek seç ya da soru yaz.</p>
+            }
+
+            @foreach (var item in _chat.Items)
+            {
+                switch (item)
+                {
+                    case UserItem u:
+                        <div class="msg user">@u.Text</div>
+                        break;
+
+                    case AssistantItem a when a.Text.Length > 0:
+                        <div class="msg assistant">@((MarkupString)Markdown.ToHtml(a.Text.ToString(), MarkdownPipeline))</div>
+                        break;
+
+                    case ToolCallItem t:
+                        <details class="tool @(t.IsHarnessTool ? "harness-tool" : "domain-tool") @(t.Result is null ? "pending" : "")">
+                            <summary>
+                                <span class="tool-icon">@ToolIcon(t)</span>
+                                <code>@t.Name</code>
+                                <span class="tool-tag">@(t.IsHarnessTool ? "harness" : "domain")</span>
+                                @if (t.AwaitingApproval && t.Result is null)
+                                {
+                                    <span class="tool-state">onay bekliyor</span>
+                                }
+                                else if (t.Result is null)
+                                {
+                                    <span class="tool-state">çalışıyor…</span>
+                                }
+                            </summary>
+                            <div class="tool-body">
+                                <label>Argümanlar</label>
+                                <pre>@Pretty(t.Arguments.ToString())</pre>
+                                @if (t.Result is not null)
+                                {
+                                    <label>Sonuç</label>
+                                    <pre>@Pretty(t.Result)</pre>
+                                }
+                            </div>
+                        </details>
+                        break;
+
+                    case ApprovalItem ap:
+                        <div class="approval @(ap.Accepted switch { true => "accepted", false => "rejected", _ => "" })">
+                            <div class="approval-title">✋ Onay gerekiyor: <code>@ap.ToolName</code></div>
+                            @if (!string.IsNullOrEmpty(ap.Arguments))
+                            {
+                                <pre>@Pretty(ap.Arguments)</pre>
+                            }
+                            @if (ap.Accepted is null)
+                            {
+                                <div class="approval-actions">
+                                    <button class="primary" disabled="@_chat.IsRunning" @onclick="() => _chat.ResolveApprovalAsync(ap, true)">Onayla</button>
+                                    <button class="danger" disabled="@_chat.IsRunning" @onclick="() => _chat.ResolveApprovalAsync(ap, false)">Reddet</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="approval-result">@(ap.Accepted == true ? "Onaylandı" : "Reddedildi")</div>
+                            }
+                        </div>
+                        break;
+
+                    case ErrorItem e:
+                        <div class="msg error">@e.Message</div>
+                        break;
+                }
+            }
+
+            @if (_chat.IsRunning)
+            {
+                <div class="typing"><span></span><span></span><span></span></div>
+            }
+        </div>
+
+        @if (ShowInput)
+        {
+            <div class="samples">
+                @foreach (var sample in Samples.All)
+                {
+                    <button class="chip" disabled="@_chat.IsRunning" title="@sample.Prompt" @onclick="() => SendAsync(sample.Prompt)">@sample.Label</button>
+                }
+            </div>
+
+            <form class="composer" @onsubmit="SubmitAsync">
+                <input @bind="_input" @bind:event="oninput" placeholder="Mesaj yaz…" disabled="@_chat.IsRunning" />
+                <button class="primary" type="submit" disabled="@(_chat.IsRunning || string.IsNullOrWhiteSpace(_input))">Gönder</button>
+            </form>
+        }
+    </section>
+
+    <aside class="panel">
+        @if (IsHarness)
+        {
+            <div class="panel-card">
+                <h3>Çalışma modu</h3>
+                @if (_chat.State?.Mode is { } mode)
+                {
+                    <span class="mode mode-@mode">@mode</span>
+                    <p class="muted small">@(mode == "plan" ? "Agent önce plan çıkarır, onayını bekler." : "Agent planı uyguluyor.")</p>
+                }
+                else
+                {
+                    <p class="muted small">Henüz durum alınmadı.</p>
+                }
+            </div>
+
+            <div class="panel-card">
+                <h3>Todo listesi <span class="count">@(_chat.State?.Todos.Count(t => t.IsComplete) ?? 0)/@(_chat.State?.Todos.Count ?? 0)</span></h3>
+                @if (_chat.State is { Todos.Count: > 0 } state)
+                {
+                    <ul class="todos">
+                        @foreach (var todo in state.Todos)
+                        {
+                            <li class="@(todo.IsComplete ? "done" : "")" title="@todo.Description">
+                                <span class="check">@(todo.IsComplete ? "✓" : "")</span>@todo.Title
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="muted small">Uzun görevlerde agent işi burada takip edilebilir adımlara böler.</p>
+                }
+            </div>
+
+            <div class="panel-card">
+                <h3>Bellek işlemleri</h3>
+                @{ var memoryCalls = _chat.Items.OfType<ToolCallItem>().Where(t => t.Name.StartsWith("file_memory_")).ToList(); }
+                @if (memoryCalls.Count > 0)
+                {
+                    <ul class="plain">
+                        @foreach (var m in memoryCalls)
+                        {
+                            <li><code>@m.Name</code></li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="muted small">Kalıcı notlar <code>agent-memory/</code> klasörüne yazılır.</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="panel-card">
+                <h3>Görünür iş durumu</h3>
+                <p class="muted small">Normal agent'ta plan, todo veya mod yok. Sadece model ↔ araç döngüsü çalışır; ilerlemeyi izlemek mesajları okumaya kalır.</p>
+            </div>
+        }
+
+        <div class="panel-card grow">
+            <h3>AG-UI olayları <span class="count">@_chat.EventLog.Count</span></h3>
+            <ol class="events">
+                @foreach (var e in Enumerable.Reverse(_chat.EventLog).Take(60))
+                {
+                    <li><span class="evt evt-@e.Type.ToLowerInvariant()">@e.Type</span> <span class="muted">@e.Detail</span></li>
+                }
+            </ol>
+        </div>
+    </aside>
+</div>
+
+@code {
+    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+
+    private AgentChat _chat = default!;
+    private string _input = "";
+
+    [Parameter, EditorRequired] public string Endpoint { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool ShowInput { get; set; } = true;
+    [Parameter] public bool Compact { get; set; }
+
+    private bool IsHarness => Endpoint == "harness";
+
+    protected override void OnInitialized()
+    {
+        _chat = new AgentChat(Client, Endpoint);
+        _chat.Changed += OnChanged;
+    }
+
+    public Task SendAsync(string text) => _chat.IsRunning ? Task.CompletedTask : _chat.SendAsync(text);
+
+    public void Reset() => _chat.Reset();
+
+    private async Task SubmitAsync()
+    {
+        var text = _input.Trim();
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        _input = "";
+        await SendAsync(text);
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private static string ToolIcon(ToolCallItem t) => t.Name switch
+    {
+        var n when n.StartsWith("todos_") => "☑",
+        var n when n.StartsWith("mode_") => "⇄",
+        var n when n.StartsWith("file_memory_") => "🗂",
+        "send_customer_email" => "✉",
+        _ => "🔧",
+    };
+
+    private static string Pretty(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return "";
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+
+            // Bazı araçlar JSON'u string olarak döndürür; bir kat daha açıyoruz.
+            if (doc.RootElement.ValueKind == JsonValueKind.String && doc.RootElement.GetString() is { } inner && inner.TrimStart().StartsWith('{'))
+            {
+                return Pretty(inner);
+            }
+
+            return JsonSerializer.Serialize(doc.RootElement, PrettyOptions);
+        }
+        catch (JsonException)
+        {
+            return json;
+        }
+    }
+
+    private static readonly JsonSerializerOptions PrettyOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    public void Dispose() => _chat.Changed -= OnChanged;
+}

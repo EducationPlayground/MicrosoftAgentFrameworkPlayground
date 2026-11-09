@@ -1,0 +1,20 @@
+@inherits LayoutComponentBase
+
+<div class="app">
+    <nav class="topbar">
+        <a class="brand" href="">Agent <span>vs</span> Harness</a>
+        <NavLink href="" Match="NavLinkMatch.All">Giriş</NavLink>
+        <NavLink href="agent">Agent</NavLink>
+        <NavLink href="harness">Harness Agent</NavLink>
+        <NavLink href="compare">Yan yana</NavLink>
+    </nav>
+    <main>
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Beklenmeyen bir hata oluştu.
+    <a href="." class="reload">Yenile</a>
+    <span class="dismiss">🗙</span>
+</div>

@@ -1,0 +1,42 @@
+@page "/"
+
+<PageTitle>Agent vs Harness</PageTitle>
+
+<div class="home">
+    <h1>Aynı model, aynı araçlar, farklı çalışma altyapısı</h1>
+    <p class="lead">
+        İki sayfa da aynı AG-UI sunucusuna bağlanır ve aynı sipariş araçlarını kullanır.
+        Tek fark sunucu tarafında agent'ın <code>AsAIAgent</code> mı yoksa <code>AsHarnessAgent</code> ile mi oluşturulduğudur.
+    </p>
+
+    <div class="cards">
+        <a class="card" href="agent">
+            <span class="kind-badge">Agent</span>
+            <h2>Normal agent</h2>
+            <p>Model + talimat + araçlar + araç çağırma döngüsü. Kısa, tek adımlı işler için yeterli.</p>
+        </a>
+        <a class="card harness" href="harness">
+            <span class="kind-badge">Harness Agent</span>
+            <h2>Harness agent</h2>
+            <p>Üstüne todo listesi, plan/execute modları, dosya belleği, onay kuralları, compaction ve telemetri.</p>
+        </a>
+        <a class="card" href="compare">
+            <span class="kind-badge">Demo</span>
+            <h2>Yan yana</h2>
+            <p>Aynı mesajı iki agent'a aynı anda gönder ve davranış farkını izle.</p>
+        </a>
+    </div>
+
+    <h3>Demo akışı</h3>
+    <table class="flow">
+        <thead><tr><th>Adım</th><th>Gösterilen</th><th>Beklenen fark</th></tr></thead>
+        <tbody>
+            <tr><td>1 · Tek sipariş</td><td>Araç çağrısı gerçekten çalışıyor</td><td>İkisi de benzer: kısa işte harness'e gerek yok</td></tr>
+            <tr><td>2 · Olmayan kayıt</td><td>Veri yoksa uydurmama</td><td>İkisi de "bulunamadı" demeli</td></tr>
+            <tr><td>3 · Uzun görev</td><td>Planlama ve görev takibi</td><td>Harness plan modunda todo listesi çıkarır ve onay ister</td></tr>
+            <tr><td>4 · Planı uygula</td><td>Mod geçişi ve ilerleme</td><td>Harness execute moduna geçer, todo'ları tek tek kapatır</td></tr>
+            <tr><td>5 · Onaylı e-posta</td><td>Eylem ile izin sınırı</td><td>İkisinde de AG-UI interrupt ile onay kartı çıkar</td></tr>
+            <tr><td>6 · Hatırla</td><td>Kalıcı bellek</td><td>Harness <code>file_memory_*</code> araçlarıyla not yazar</td></tr>
+        </tbody>
+    </table>
+</div>

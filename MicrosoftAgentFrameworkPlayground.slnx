@@ -1,3 +1,9 @@
 <Solution>
+  <Folder Name="/HarnessDemo/">
+    <Project Path="HarnessDemo/HarnessDemo.AppHost/HarnessDemo.AppHost.csproj" />
+    <Project Path="HarnessDemo/HarnessDemo.AgentServer/HarnessDemo.AgentServer.csproj" />
+    <Project Path="HarnessDemo/HarnessDemo.BlazorClient/HarnessDemo.BlazorClient.csproj" />
+    <Project Path="HarnessDemo/HarnessDemo.ServiceDefaults/HarnessDemo.ServiceDefaults.csproj" />
+  </Folder>
   <Project Path="WebApplication.API/WebApplication.API.csproj" />
 </Solution>

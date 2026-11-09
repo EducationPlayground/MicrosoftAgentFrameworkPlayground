@@ -361,3 +361,8 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# HarnessDemo: harness dosya belleği (çalışma zamanı verisi)
+HarnessDemo.AgentServer/App_Data/
+
+# HarnessDemo file memory
+agent-memory/

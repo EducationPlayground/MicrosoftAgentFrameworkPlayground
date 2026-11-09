@@ -1,0 +1,17 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.5.3">
+
+  <ItemGroup>
+    <ProjectReference Include="..\HarnessDemo.AgentServer\HarnessDemo.AgentServer.csproj" />
+    <ProjectReference Include="..\HarnessDemo.BlazorClient\HarnessDemo.BlazorClient.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <UserSecretsId>b25badbc-2ff6-43f8-80a9-9cdc1183c9d2</UserSecretsId>
+  </PropertyGroup>
+
+</Project>
