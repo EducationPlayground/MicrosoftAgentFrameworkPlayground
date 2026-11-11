@@ -35,31 +35,28 @@ const string DomainInstructions = """
     Müşteriye e-posta göndermek için send_customer_email aracını kullan; bu araç kullanıcı onayı gerektirir.
     """;
 
+// İki agent'a aynı talimat ve aynı araçlar. Her agent kendi ChatOptions örneğini alır.
+static ChatOptions CreateChatOptions(IServiceProvider sp) => new()
+{
+    Instructions = DomainInstructions,
+    Tools = sp.GetRequiredService<OrderTools>().CreateTools(),
+};
+
 // --- 1) Normal agent: model + talimat + araçlar + araç çağırma döngüsü ------
 var plainAgent = builder.AddAIAgent("plain-agent", (sp, name) =>
-{
-    var tools = sp.GetRequiredService<OrderTools>();
-
-    return sp.GetRequiredService<IChatClient>().AsAIAgent(new ChatClientAgentOptions
+    sp.GetRequiredService<IChatClient>().AsAIAgent(new ChatClientAgentOptions
     {
         Name = name,
-        ChatOptions = new ChatOptions
-        {
-            Instructions = DomainInstructions,
-            Tools = [.. tools.CreateReadTools(), new ApprovalRequiredAIFunction(tools.CreateSendEmailTool())],
-        },
+        ChatOptions = CreateChatOptions(sp),
 
         // Onay isteği geçmişe model çağrısı anında yazılsın; aksi halde AG-UI resume'u bir sonraki
         // istekte bekleyen isteği bulamıyor. Harness bunu varsayılan olarak açık getirir.
         RequirePerServiceCallChatHistoryPersistence = true,
-    });
-});
+    }));
 
 // --- 2) Harness agent: aynı model ve araçlar + hazır çalışma altyapısı -----
 var harnessAgent = builder.AddAIAgent("harness-agent", (sp, name) =>
 {
-    var tools = sp.GetRequiredService<OrderTools>();
-
     // Todo ve mod sağlayıcılarını kendimiz oluşturuyoruz ki durumlarını UI'a yayınlayabilelim.
     var todoProvider = new TodoProvider(new TodoProviderOptions());
     var modeProvider = new AgentModeProvider(new AgentModeProviderOptions());
@@ -67,11 +64,7 @@ var harnessAgent = builder.AddAIAgent("harness-agent", (sp, name) =>
     AIAgent harness = sp.GetRequiredService<IChatClient>().AsHarnessAgent(new HarnessAgentOptions
     {
         Name = name,
-        ChatOptions = new ChatOptions
-        {
-            Instructions = DomainInstructions,
-            Tools = [.. tools.CreateReadTools(), new ApprovalRequiredAIFunction(tools.CreateSendEmailTool())],
-        },
+        ChatOptions = CreateChatOptions(sp),
 
         // Planlama: todo listesi ve plan/execute modları (varsayılanları dışarıdan veriyoruz).
         DisableTodoProvider = true,
@@ -86,8 +79,8 @@ var harnessAgent = builder.AddAIAgent("harness-agent", (sp, name) =>
         // Bağlam yönetimi (compaction) bilinçli olarak kapalı: MaxContextWindowTokens verildiğinde
         // 1.28.0 sürümünde hosted session ile sonraki turların mesajları modele ulaşmıyor (experimental).
 
-        // Sınırlı çalışma: tek istekte en fazla 40 araç çağırma turu.
-        MaximumIterationsPerRequest = 40,
+        // Sınırlı çalışma: MaximumIterationsPerRequest verilmedi; FunctionInvokingChatClient varsayılanı (40)
+        // iki agent'ta da aynı. Sınır harness'e özgü değil, function invocation katmanından gelir.
 
         // Hosted web search OpenAI'ın web_search_options'ına çevrilir; OpenRouter sağlayıcıları bunu araçlarla sunmuyor.
         DisableWebSearch = true,

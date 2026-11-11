@@ -47,6 +47,8 @@ Sayfalar: `/agent`, `/harness`, `/compare` (aynı mesajı iki agent'a birlikte g
 - **Harness durumu → UI:** `HarnessStateAgent` todo listesini ve modu her ilgili araç çağrısından sonra okur, `DataContent` olarak yayınlar. `AGUIStreamOptions.MapContent` bunu `STATE_SNAPSHOT` olayına çevirir.
 - **Onay resume formatı:** istemci `resume[].payload` içinde `{ approved, toolCall: { callId, name, arguments } }` gönderir.
 - **Normal agent'ta `RequirePerServiceCallChatHistoryPersistence = true`:** bu olmadan AG-UI resume'u bekleyen onay isteğini bulamıyor. Harness bunu varsayılan olarak açık getirir; sunumda iyi bir "harness hazır getirir" örneği.
+- **Döngü sınırı ortak:** iki agent'ta da `FunctionInvokingChatClient` varsayılanı 40 tur. Harness'e özgü bir fark değildir.
+- **Talimat farkı:** harness, `DomainInstructions` öncesine kendi `HarnessAgent.DefaultInstructions` metnini ekler (`HarnessInstructions = null` ise). Alan talimatı aynı, sistem prompt'u aynı değil.
 - **Compaction kapalı:** 1.28.0'da `MaxContextWindowTokens` verildiğinde hosted session ile sonraki turların mesajları modele ulaşmıyor (experimental özellik).
 - **Model:** OpenRouter (OpenAI uyumlu endpoint `https://openrouter.ai/api/v1`), varsayılan `anthropic/claude-haiku-5.5`.
 - **Web search kapalı:** hosted web search OpenAI'ın `web_search_options` alanına çevrilir; OpenRouter sağlayıcıları bunu araçlarla birlikte sunmuyor.

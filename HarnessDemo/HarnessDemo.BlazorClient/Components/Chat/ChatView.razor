@@ -196,6 +196,8 @@
 
     private bool IsHarness => Endpoint == "harness";
 
+    public bool IsRunning => _chat.IsRunning;
+
     protected override void OnInitialized()
     {
         _chat = new AgentChat(Client, Endpoint);

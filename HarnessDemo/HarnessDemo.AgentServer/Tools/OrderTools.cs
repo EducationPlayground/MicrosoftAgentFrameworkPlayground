@@ -27,15 +27,17 @@ public sealed class OrderTools(ILogger<OrderTools> logger)
         new("1050", "C-02", "Mehmet Kaya", "mehmet@example.com", "delayed", "Aras", "stock_shortage", 6, Today.AddDays(-28)),
     ];
 
-    public IEnumerable<AIFunction> CreateReadTools() =>
+    /// <summary>
+    /// İki agent'ın da kullandığı araç seti. Onay aracın kendi özelliğidir: e-posta aracı
+    /// <see cref="ApprovalRequiredAIFunction"/> ile sarılır, okuma araçları onaysız çalışır.
+    /// </summary>
+    public IList<AITool> CreateTools() =>
     [
         AIFunctionFactory.Create(GetOrderStatus, "get_order_status"),
         AIFunctionFactory.Create(GetShipmentEvents, "get_shipment_events"),
         AIFunctionFactory.Create(ListDelayedOrders, "list_delayed_orders"),
+        new ApprovalRequiredAIFunction(AIFunctionFactory.Create(SendCustomerEmail, "send_customer_email")),
     ];
-
-    public AIFunction CreateSendEmailTool() =>
-        AIFunctionFactory.Create(SendCustomerEmail, "send_customer_email");
 
     [Description("Siparişin mevcut durumunu getirir.")]
     public string GetOrderStatus([Description("Sorgulanacak sipariş numarası, örn. 1042.")] string orderId)

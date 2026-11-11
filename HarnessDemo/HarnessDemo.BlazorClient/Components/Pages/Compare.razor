@@ -29,8 +29,11 @@
     private ChatView? _harness;
     private string _input = "";
 
+    // Biri hâlâ çalışıyorsa ikisine de gönderme; yoksa mesaj yalnızca boştakine gider ve thread'ler ayrışır.
     private Task SendBothAsync(string text) =>
-        Task.WhenAll(_agent!.SendAsync(text), _harness!.SendAsync(text));
+        _agent!.IsRunning || _harness!.IsRunning
+            ? Task.CompletedTask
+            : Task.WhenAll(_agent.SendAsync(text), _harness.SendAsync(text));
 
     private async Task SubmitAsync()
     {
