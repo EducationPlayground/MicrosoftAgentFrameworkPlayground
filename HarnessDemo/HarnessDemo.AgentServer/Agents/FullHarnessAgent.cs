@@ -58,8 +58,9 @@ public static class FullHarnessAgent
         });
     }
 
-    public static AIAgent Create(IServiceProvider sp, string name, string contentRoot)
+    public static AIAgent Create(IServiceProvider sp, string name)
     {
+        var contentRoot = sp.GetRequiredService<IHostEnvironment>().ContentRootPath;
         var chatClient = sp.GetRequiredService<IChatClient>();
         var webSearch = sp.GetRequiredService<WebSearchTool>().AsAIFunction();
         var sandbox = sp.GetRequiredService<DockerShellExecutor>();

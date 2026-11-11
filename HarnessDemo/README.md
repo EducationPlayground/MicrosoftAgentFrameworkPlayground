@@ -9,6 +9,18 @@
 
 İki agent da aynı modeli, aynı talimatı ve aynı sipariş araçlarını kullanır. Tek fark sunucuda agent'ın `AsAIAgent` mı `AsHarnessAgent` mı ile oluşturulmasıdır.
 
+Agent kodu `HarnessDemo.AgentServer/Agents/` altında, her agent ayrı dosyada:
+
+| Dosya | Endpoint |
+|---|---|
+| `PlainOrderAgent.cs` | `POST /agent` |
+| `HarnessOrderAgent.cs` | `POST /harness` |
+| `FullHarnessAgent.cs` | `POST /full` |
+| `OrderAgentCommon.cs` | ilk ikisinin ortak talimatı ve araçları |
+| `HarnessStateAgent.cs` | todo ve modu UI'a yayınlayan sarmalayıcı |
+
+`Program.cs` yalnızca modeli, servisleri ve endpoint'leri bağlar.
+
 ## Çalıştırma
 
 Aspire ile (önerilen):
@@ -65,7 +77,7 @@ Kapalı olanlar: **compaction** (aşağıya bakın) ve **LoopEvaluators**. Döng
 - **Onay resume formatı:** istemci `resume[].payload` içinde `{ approved, toolCall: { callId, name, arguments } }` gönderir.
 - **Normal agent'ta `RequirePerServiceCallChatHistoryPersistence = true`:** bu olmadan AG-UI resume'u bekleyen onay isteğini bulamıyor. Harness bunu varsayılan olarak açık getirir; sunumda iyi bir "harness hazır getirir" örneği.
 - **Döngü sınırı ortak:** iki agent'ta da `FunctionInvokingChatClient` varsayılanı 40 tur. Harness'e özgü bir fark değildir.
-- **Talimat farkı:** harness, `DomainInstructions` öncesine kendi `HarnessAgent.DefaultInstructions` metnini ekler (`HarnessInstructions = null` ise). Alan talimatı aynı, sistem prompt'u aynı değil.
+- **Talimat farkı:** harness, `OrderAgentCommon.Instructions` öncesine kendi `HarnessAgent.DefaultInstructions` metnini ekler (`HarnessInstructions = null` ise). Alan talimatı aynı, sistem prompt'u aynı değil.
 - **Compaction kapalı:** 1.28.0'da `MaxContextWindowTokens` verildiğinde hosted session ile sonraki turların mesajları modele ulaşmıyor (experimental özellik).
 - **Model:** OpenRouter (OpenAI uyumlu endpoint `https://openrouter.ai/api/v1`), varsayılan `anthropic/claude-haiku-5.5`.
 - **Web search kapalı:** hosted web search OpenAI'ın `web_search_options` alanına çevrilir; OpenRouter sağlayıcıları bunu araçlarla birlikte sunmuyor.
