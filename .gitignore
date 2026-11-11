@@ -366,3 +366,7 @@ HarnessDemo.AgentServer/App_Data/
 
 # HarnessDemo file memory
 agent-memory/
+
+# HarnessDemo full harness çalışma alanı ve belleği
+agent-workspace/
+agent-memory-full/

@@ -18,15 +18,23 @@ var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
     ?? throw new InvalidOperationException("OPENROUTER_API_KEY environment variable is not set.");
 var model = builder.Configuration["OpenRouter:Model"] ?? "anthropic/claude-haiku-5.5";
 
-IChatClient chatClient = new OpenAIClient(
-        new ApiKeyCredential(openRouterKey),
-        new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") })
-    .GetChatClient(model)
-    .AsIChatClient();
+var openRouter = new OpenAIClient(
+    new ApiKeyCredential(openRouterKey),
+    new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") });
+
+IChatClient chatClient = openRouter.GetChatClient(model).AsIChatClient();
 
 builder.Services.AddSingleton(chatClient);
 builder.Services.AddSingleton<OrderTools>();
 builder.Services.AddAGUIServer();
+
+// Full harness için: web araması (OpenRouter web eklentisi, ":online" son eki) ve Docker sandbox.
+var searchModel = builder.Configuration["OpenRouter:SearchModel"] ?? $"{model}:online";
+builder.Services.AddSingleton(sp => new WebSearchTool(
+    openRouter.GetChatClient(searchModel).AsIChatClient(),
+    sp.GetRequiredService<ILogger<WebSearchTool>>()));
+builder.Services.AddSingleton(_ =>
+    FullHarnessAgent.CreateSandbox(Path.Combine(builder.Environment.ContentRootPath, "agent-workspace")));
 
 const string DomainInstructions = """
     Sipariş destek asistanısın. Türkçe yanıt ver.
@@ -89,10 +97,15 @@ var harnessAgent = builder.AddAIAgent("harness-agent", (sp, name) =>
     return new HarnessStateAgent(harness, todoProvider, modeProvider);
 });
 
+// --- 3) Full harness: açılabilen her şey (web araması, sandbox, dosya erişimi, skill, arka plan agent'ı)
+var fullAgent = builder.AddAIAgent("full-harness-agent", (sp, name) =>
+    FullHarnessAgent.Create(sp, name, builder.Environment.ContentRootPath));
+
 // threadId ile turlar arasında server-side session korunur (todo/mod/geçmiş).
 // Yerel demo: tek güvenilir kullanıcı varsayımıyla izolasyon kapalı. Production'da kalıcı store + izolasyon gerekir.
 plainAgent.WithInMemorySessionStore(withIsolation: false);
 harnessAgent.WithInMemorySessionStore(withIsolation: false);
+fullAgent.WithInMemorySessionStore(withIsolation: false);
 
 var app = builder.Build();
 
@@ -106,7 +119,8 @@ var harnessStreamOptions = new AGUIStreamOptions()
 
 app.MapAGUIServer(plainAgent, "/agent");
 app.MapAGUIServer(harnessAgent, "/harness").WithMetadata(harnessStreamOptions);
+app.MapAGUIServer(fullAgent, "/full").WithMetadata(harnessStreamOptions);
 
-app.MapGet("/", () => "HarnessDemo AG-UI server: POST /agent, POST /harness");
+app.MapGet("/", () => "HarnessDemo AG-UI server: POST /agent, POST /harness, POST /full");
 
 app.Run();

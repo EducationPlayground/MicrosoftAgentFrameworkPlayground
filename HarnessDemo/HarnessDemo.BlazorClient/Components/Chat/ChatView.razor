@@ -5,7 +5,7 @@
     <section class="chat">
         <header class="chat-header">
             <div>
-                <span class="kind-badge">@(IsHarness ? "Harness Agent" : "Agent")</span>
+                <span class="kind-badge">@(IsFull ? "Harness Agent · Full" : IsHarness ? "Harness Agent" : "Agent")</span>
                 <h2>@Title</h2>
                 <p class="muted">POST /@_chat.Endpoint · thread @_chat.ThreadId[..8]</p>
             </div>
@@ -35,11 +35,12 @@
                         break;
 
                     case ToolCallItem t:
-                        <details class="tool @(t.IsHarnessTool ? "harness-tool" : "domain-tool") @(t.Result is null ? "pending" : "")">
+                        var (icon, label) = ToolKinds.Describe(t.Kind);
+                        <details class="tool kind-@t.Kind.ToString().ToLowerInvariant() @(t.Kind == ToolKind.Domain ? "domain-tool" : "harness-tool") @(t.Result is null ? "pending" : "")">
                             <summary>
-                                <span class="tool-icon">@ToolIcon(t)</span>
+                                <span class="tool-icon">@(t.Name == "send_customer_email" ? "✉" : icon)</span>
                                 <code>@t.Name</code>
-                                <span class="tool-tag">@(t.IsHarnessTool ? "harness" : "domain")</span>
+                                <span class="tool-tag">@label</span>
                                 @if (t.AwaitingApproval && t.Result is null)
                                 {
                                     <span class="tool-state">onay bekliyor</span>
@@ -97,7 +98,7 @@
         @if (ShowInput)
         {
             <div class="samples">
-                @foreach (var sample in Samples.All)
+                @foreach (var sample in SampleSet ?? Samples.All)
                 {
                     <button class="chip" disabled="@_chat.IsRunning" title="@sample.Prompt" @onclick="() => SendAsync(sample.Prompt)">@sample.Label</button>
                 }
@@ -111,6 +112,23 @@
     </section>
 
     <aside class="panel">
+        @if (IsFull)
+        {
+            <div class="panel-card">
+                <h3>Harness parçaları</h3>
+                <ul class="capabilities">
+                    @foreach (var kind in FullKinds)
+                    {
+                        var (icon, label) = ToolKinds.Describe(kind);
+                        var calls = _chat.Items.OfType<ToolCallItem>().Where(t => t.Kind == kind).ToList();
+                        <li class="@(calls.Count > 0 ? "used" : "")" title="@string.Join(", ", calls.Select(c => c.Name).Distinct())">
+                            <span>@icon @label</span><span class="count">@calls.Count</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
         @if (IsHarness)
         {
             <div class="panel-card">
@@ -159,7 +177,7 @@
                 }
                 else
                 {
-                    <p class="muted small">Kalıcı notlar <code>agent-memory/</code> klasörüne yazılır.</p>
+                    <p class="muted small">Kalıcı notlar <code>@(IsFull ? "agent-memory-full/" : "agent-memory/")</code> klasörüne yazılır.</p>
                 }
             </div>
         }
@@ -193,8 +211,13 @@
     [Parameter] public string Title { get; set; } = "";
     [Parameter] public bool ShowInput { get; set; } = true;
     [Parameter] public bool Compact { get; set; }
+    [Parameter] public IReadOnlyList<Samples.Sample>? SampleSet { get; set; }
 
-    private bool IsHarness => Endpoint == "harness";
+    private static readonly ToolKind[] FullKinds =
+        [ToolKind.Web, ToolKind.Sandbox, ToolKind.Files, ToolKind.Background, ToolKind.Skills, ToolKind.Planning, ToolKind.Memory];
+
+    private bool IsFull => Endpoint == "full";
+    private bool IsHarness => Endpoint is "harness" or "full";
 
     public bool IsRunning => _chat.IsRunning;
 
@@ -221,15 +244,6 @@
     }
 
     private void OnChanged() => InvokeAsync(StateHasChanged);
-
-    private static string ToolIcon(ToolCallItem t) => t.Name switch
-    {
-        var n when n.StartsWith("todos_") => "☑",
-        var n when n.StartsWith("mode_") => "⇄",
-        var n when n.StartsWith("file_memory_") => "🗂",
-        "send_customer_email" => "✉",
-        _ => "🔧",
-    };
 
     private static string Pretty(string? json)
     {

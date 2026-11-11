@@ -236,6 +236,14 @@ main { flex: 1; min-height: 0; overflow: auto; }
 
 .plain { margin: 0; padding-left: 1rem; font-size: 0.85rem; }
 
+/* Full harness: parça kullanım sayaçları ve araç türü renkleri */
+.capabilities { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.88rem; }
+.capabilities li { display: flex; justify-content: space-between; color: var(--muted); }
+.capabilities li.used { color: var(--text); font-weight: 600; }
+.tool.kind-web { background: #e8f6f1; border-color: #bfe5d6; }
+.tool.kind-sandbox { background: #fdf2e4; border-color: #f2d6ae; }
+.tool.kind-files, .tool.kind-skills { background: #eef2f7; border-color: #d3dce8; }
+
 .events { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; font-size: 0.78rem; font-family: var(--mono); }
 .events li { padding: 0.15rem 0; border-bottom: 1px dashed var(--border); overflow-wrap: anywhere; }
 .evt { font-weight: 600; }

@@ -257,10 +257,39 @@ public sealed record ToolCallItem(string Id, string Name) : ChatItem
     public string? Result { get; set; }
     public bool AwaitingApproval { get; private set; }
 
-    /// <summary>Harness'in kendi altyapı araçları (planlama, mod, bellek).</summary>
-    public bool IsHarnessTool => Name.StartsWith("todos_") || Name.StartsWith("mode_") || Name.StartsWith("file_memory_");
+    public ToolKind Kind => ToolKinds.Of(Name);
 
     public void MarkAwaitingApproval() => AwaitingApproval = true;
+}
+
+/// <summary>Araç adından harness parçasına eşleme. Önekler MAF'ın araç adlarından gelir.</summary>
+public enum ToolKind { Domain, Planning, Memory, Files, Skills, Background, Web, Sandbox }
+
+public static class ToolKinds
+{
+    public static ToolKind Of(string name) => name switch
+    {
+        _ when name.StartsWith("todos_") || name.StartsWith("mode_") => ToolKind.Planning,
+        _ when name.StartsWith("file_memory_") => ToolKind.Memory,
+        _ when name.StartsWith("file_access_") => ToolKind.Files,
+        _ when name.StartsWith("background_agents_") => ToolKind.Background,
+        "load_skill" or "read_skill_resource" or "run_skill_script" => ToolKind.Skills,
+        "web_search" => ToolKind.Web,
+        "run_shell" => ToolKind.Sandbox,
+        _ => ToolKind.Domain,
+    };
+
+    public static (string Icon, string Label) Describe(ToolKind kind) => kind switch
+    {
+        ToolKind.Planning => ("☑", "planlama"),
+        ToolKind.Memory => ("🗂", "bellek"),
+        ToolKind.Files => ("📄", "dosya"),
+        ToolKind.Skills => ("📘", "skill"),
+        ToolKind.Background => ("👥", "arka plan"),
+        ToolKind.Web => ("🌐", "web"),
+        ToolKind.Sandbox => ("🐳", "sandbox"),
+        _ => ("🔧", "domain"),
+    };
 }
 
 public sealed record ApprovalItem(string InterruptId, string? ToolCallId, string ToolName, string? Arguments, string? Message) : ChatItem
